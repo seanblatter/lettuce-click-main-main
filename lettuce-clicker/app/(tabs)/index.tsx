@@ -154,6 +154,7 @@ export default function HomeScreen() {
   };
 
   const {
+    isLoading,
     harvest,
     lifetimeHarvest,
     formatLifetimeHarvest,
@@ -1162,10 +1163,12 @@ export default function HomeScreen() {
             <GestureDetector gesture={djGesture}>
               <Pressable
                 accessibilityLabel="Harvest lettuce"
-                onPress={addHarvest}
+                onPress={isLoading ? undefined : addHarvest}
+                disabled={isLoading}
                 style={({ pressed }) => [
                   styles.lettuceButton,
                   pressed && styles.lettucePressed,
+                  isLoading && { opacity: 0.5 },
                 ]}
               >
                 <View style={[styles.lettuceButtonBase, { backgroundColor: accentColor }]} />

@@ -2,6 +2,7 @@ import React, { Fragment, ReactNode, useCallback, useEffect, useMemo, useRef, us
 import { ShopPreviewModal } from './ShopPreviewModal';
 import {
   Alert,
+  Animated as RNAnimated,
   FlatList,
   LayoutChangeEvent,
   GestureResponderEvent,
@@ -89,6 +90,44 @@ const stripVariationSelectors = (value: string) => value.replace(VARIATION_SELEC
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const formatEmojiDescription = (entry: { tags: string[]; description?: string }) => {
+  if (!entry.tags || entry.tags.length === 0) {
+    return entry.description || 'A fresh garden accent ready to brighten your park.';
+  }
+
+  // Get the displayed tags (first 3) to filter them out of description
+  const displayedTags = entry.tags.slice(0, 3).map(tag => tag.toLowerCase());
+  
+  const readableTags = entry.tags
+    .slice(0, 5)
+    .filter(tag => {
+      // Remove tags that are shown as hashtags (first 3 tags)
+      const normalized = tag.toLowerCase().replace(/[-_]/g, ' ');
+      return !displayedTags.some(displayedTag => {
+        const displayedNormalized = displayedTag.toLowerCase().replace(/[-_]/g, ' ');
+        return normalized === displayedNormalized || normalized.includes(displayedNormalized) || displayedNormalized.includes(normalized);
+      });
+    })
+    .map((tag) => tag.replace(/[-_]/g, ' '))
+    .map((tag) => tag.charAt(0).toUpperCase() + tag.slice(1));
+
+  if (readableTags.length === 0) {
+    return 'A unique decoration for your garden.';
+  }
+
+  if (readableTags.length === 1) {
+    return `${readableTags[0]} inspiration for your garden layouts.`;
+  }
+
+  if (readableTags.length === 2) {
+    return `${readableTags[0]} and ${readableTags[1]} vibes for your space.`;
+  }
+
+  const last = readableTags[readableTags.length - 1];
+  const rest = readableTags.slice(0, -1).join(', ');
+  return `${rest}, and ${last} aesthetics.`;
+};
 
 const CANVAS_BACKGROUND = '#ffffff';
 const ERASER_COLOR = 'eraser';
@@ -236,6 +275,14 @@ const INVENTORY_ROW_GAP = 12;
 const SHOP_EMOJI_CHOICES = ['🏡', '🚀', '🛍', '📱'] as const;
 const INVENTORY_EMOJI_CHOICES = ['🧰', '📦', '💼', '👜'] as const;
 
+// Colors for each inventory slot highlight
+const INVENTORY_COLORS = {
+  '🧰': { color: '#f59e0b', name: 'gold' },      // Gold/Amber
+  '📦': { color: '#a855f7', name: 'purple' },    // Purple
+  '💼': { color: '#3b82f6', name: 'blue' },      // Blue
+  '👜': { color: '#ec4899', name: 'pink' },      // Pink
+} as const;
+
 type InventoryEntry = EmojiDefinition & {
   owned: boolean;
   searchBlob: string;
@@ -261,25 +308,6 @@ function formatHarvestDisplay(harvest: number): string {
   }
   return harvest.toLocaleString();
 }
-
-const formatEmojiDescription = (entry: InventoryEntry) => {
-  if (!entry.tags.length) {
-    return 'A fresh garden accent ready to brighten your park.';
-  }
-
-  const readableTags = entry.tags
-    .slice(0, 5)
-    .map((tag) => tag.replace(/[-_]/g, ' '))
-    .map((tag) => tag.charAt(0).toUpperCase() + tag.slice(1));
-
-  if (readableTags.length === 1) {
-    return `${readableTags[0]} inspiration for your garden layouts.`;
-  }
-
-  const last = readableTags[readableTags.length - 1];
-  const others = readableTags.slice(0, -1);
-  return `${others.join(', ')} and ${last} combine in this decoration.`;
-};
 
 export function GardenSection({
   harvest,
@@ -340,7 +368,21 @@ export function GardenSection({
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
   const [shopPreview, setShopPreview] = useState<InventoryEntry | null>(null);
   const [selectedInventoryEmoji, setSelectedInventoryEmoji] = useState<InventoryEntry | null>(null);
-  const [walletEmojis, setWalletEmojis] = useState<InventoryEntry[]>([]);
+  const [isEditingInventoryName, setIsEditingInventoryName] = useState(false);
+  const [editedInventoryName, setEditedInventoryName] = useState('');
+  const inventoryFlipAnimation = useRef(new RNAnimated.Value(0)).current;
+  
+  // Separate wallets for each inventory icon (max 10 per wallet)
+  const [inventoryWallets, setInventoryWallets] = useState<Record<string, InventoryEntry[]>>({
+    '🧰': [],
+    '📦': [],
+    '💼': [],
+    '👜': [],
+  });
+  
+  // Current active wallet based on selected inventory emoji
+  const walletEmojis = inventoryWallets[inventoryEmoji] || [];
+  
   const [isDrawingGestureActive, setIsDrawingGestureActive] = useState(false);
   const [customEmojiLeft, setCustomEmojiLeft] = useState('🌸');
   const [customEmojiRight, setCustomEmojiRight] = useState('🌟');
@@ -349,6 +391,8 @@ export function GardenSection({
   const [customBlendCost, setCustomBlendCost] = useState<number | null>(null);
   const [customBlendError, setCustomBlendError] = useState<string | null>(null);
   const [isLoadingCustomBlend, setIsLoadingCustomBlend] = useState(false);
+  const [isEditingBlendName, setIsEditingBlendName] = useState(false);
+  const [editedBlendName, setEditedBlendName] = useState('');
   
   // Debug shopPreview state changes
   useEffect(() => {
@@ -613,9 +657,42 @@ export function GardenSection({
   // Auto-blend when both emojis are present
   useEffect(() => {
     if (hasPremiumUpgrade && customEmojiLeft && customEmojiRight && customEmojiLeft.trim().length > 0 && customEmojiRight.trim().length > 0) {
-      handleBlendCustomEmoji();
+      // Call blend directly without including it in dependencies to avoid infinite loops
+      const blendEmojis = async () => {
+        console.log('🎨 Starting blend:', customEmojiLeft, '+', customEmojiRight);
+        
+        if (!hasPremiumUpgrade) {
+          setCustomBlendError('Upgrade to blend custom Emoji Kitchen stickers.');
+          return;
+        }
+
+        setCustomBlendError(null);
+        setIsLoadingCustomBlend(true);
+
+        try {
+          const result = await fetchEmojiKitchenMash(customEmojiLeft, customEmojiRight);
+          const compositeEmoji = `${customEmojiLeft}${customEmojiRight}`;
+          const estimatedCost = computeKitchenEmojiCost(compositeEmoji);
+          
+          console.log('✅ Blend success:', result.imageUrl);
+          setCustomBlendPreview(result.imageUrl);
+          setCustomBlendDescription(result.description);
+          setCustomBlendCost(estimatedCost);
+        } catch (error) {
+          console.error('❌ Blend failed:', error);
+          setCustomBlendPreview(null);
+          setCustomBlendDescription('');
+          setCustomBlendCost(null);
+          setCustomBlendError(
+            error instanceof Error ? error.message : 'Unable to create a mashup right now. Please try again.'
+          );
+        } finally {
+          setIsLoadingCustomBlend(false);
+        }
+      };
+      blendEmojis();
     }
-  }, [customEmojiLeft, customEmojiRight, hasPremiumUpgrade, handleBlendCustomEmoji]);
+  }, [customEmojiLeft, customEmojiRight, hasPremiumUpgrade, computeKitchenEmojiCost]);
 
   const handleRandomizeBlend = useCallback(async () => {
     // Filter for base emojis (not custom ones) to ensure better compatibility
@@ -625,9 +702,6 @@ export function GardenSection({
 
     setIsLoadingCustomBlend(true);
     setCustomBlendError(null);
-    setCustomBlendPreview(null);
-    setCustomBlendDescription('');
-    setCustomBlendCost(null);
 
     try {
       let attempts = 0;
@@ -657,7 +731,6 @@ export function GardenSection({
       }
     } catch (error) {
       console.warn('Randomize blend failed:', error);
-    } finally {
       setIsLoadingCustomBlend(false);
     }
   }, [emojiCatalog]);
@@ -974,32 +1047,55 @@ export function GardenSection({
     // Toggle emoji stats display in inventory
     if (selectedInventoryEmoji?.id === item.id) {
       setSelectedInventoryEmoji(null);
+      setIsEditingInventoryName(false);
     } else {
       setSelectedInventoryEmoji(item);
+      setIsEditingInventoryName(false);
     }
   }, [selectedInventoryEmoji]);
 
+  const handleInventoryEmojiIconFlip = useCallback(() => {
+    RNAnimated.timing(inventoryFlipAnimation, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start(() => {
+      inventoryFlipAnimation.setValue(0);
+    });
+  }, [inventoryFlipAnimation]);
+
   const handleInventoryLongPress = useCallback((item: InventoryEntry) => {
-    console.log('🎒 Long press detected for:', item.name);
+    console.log('🎒 Long press detected for:', item.name, 'Inventory:', inventoryEmoji);
     
-    // Toggle emoji in wallet
-    setWalletEmojis(prev => {
-      const isInWallet = prev.some(e => e.id === item.id);
+    // Toggle emoji in the current inventory wallet
+    setInventoryWallets(prev => {
+      const currentWallet = prev[inventoryEmoji] || [];
+      const isInWallet = currentWallet.some(e => e.id === item.id);
+      
       if (isInWallet) {
         console.log('🗑️ Removing from wallet:', item.name);
-        // Remove from wallet
-        return prev.filter(e => e.id !== item.id);
+        // Remove from current wallet
+        return {
+          ...prev,
+          [inventoryEmoji]: currentWallet.filter(e => e.id !== item.id),
+        };
       } else {
         console.log('✨ Adding to wallet:', item.name);
-        // Add to wallet (max 10 items)
-        if (prev.length >= 10) {
+        // Add to current wallet (max 10 items)
+        if (currentWallet.length >= 10) {
           console.log('💼 Wallet full, replacing oldest');
-          return [...prev.slice(1), item]; // Remove first, add new
+          return {
+            ...prev,
+            [inventoryEmoji]: [...currentWallet.slice(1), item], // Remove first, add new
+          };
         }
-        return [...prev, item];
+        return {
+          ...prev,
+          [inventoryEmoji]: [...currentWallet, item],
+        };
       }
     });
-  }, []);
+  }, [inventoryEmoji]);
 
   const handlePurchase = (emojiId: string) => {
     const success = purchaseEmoji(emojiId);
@@ -1591,6 +1687,7 @@ export function GardenSection({
         onInventorySelect={handleInventorySelect}
         onInventoryLongPress={handleInventoryLongPress}
         isInWallet={isInWallet}
+        walletColor={INVENTORY_COLORS[inventoryEmoji]?.color || '#f59e0b'}
         onLayout={handleInventoryTileLayout}
         beginDrag={beginInventoryDrag}
         updateDrag={updateInventoryDrag}
@@ -2295,13 +2392,6 @@ export function GardenSection({
                   </Pressable>
                 ) : null}
               </View>
-              <View style={styles.collectionSummary}>
-                <Text style={styles.collectionSummaryLabel}>Emojis collected</Text>
-                <Text style={styles.collectionSummaryValue}>{collectionProgressLabel}</Text>
-                <Text style={styles.collectionSummaryHint}>
-                  Unlocked emojis stay available in your inventory for unlimited use.
-                </Text>
-              </View>
               <View style={styles.sortRow}>
                 <Text style={styles.sortLabel}>Price</Text>
                 <Pressable
@@ -2403,42 +2493,97 @@ export function GardenSection({
                     </View>
 
                     {customBlendError ? <Text style={styles.customBlendError}>{customBlendError}</Text> : null}
-                    {isLoadingCustomBlend && (
-                      <Text style={{ fontSize: 14, color: '#0ea5e9', textAlign: 'center', marginTop: 8 }}>Blending...</Text>
-                    )}
-
-                    {customBlendPreview && (() => {
+                    
+                    {/* Always show blend preview for premium users - even during loading or errors */}
+                    {(() => {
                       const compositeEmoji = `${customEmojiLeft}${customEmojiRight}`;
                       const blendDefinition = emojiCatalog.find((e) => e.emoji === compositeEmoji && e.id.startsWith('custom-'));
                       const isOwned = blendDefinition && emojiInventory[blendDefinition.id];
 
-                      if (isOwned && blendDefinition) {
+                      // If loading and no preview yet, show loading state
+                      if (isLoadingCustomBlend && !customBlendPreview) {
+                        return (
+                          <View style={styles.customBlendPreviewRow}>
+                            <View style={[styles.customBlendImageContainer, { backgroundColor: '#f1f5f9' }]}>
+                              <Text style={{ fontSize: 32 }}>⏳</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 14, color: '#0ea5e9', fontWeight: '600' }}>Blending...</Text>
+                              <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Creating your custom emoji</Text>
+                            </View>
+                          </View>
+                        );
+                      }
+
+                      // If we have a preview and it's owned, show the owned card
+                      if (customBlendPreview && isOwned && blendDefinition) {
                         return (
                           <View style={styles.emojiStatsContainer}>
                             <View style={styles.emojiStatsHeader}>
-                              <View style={styles.emojiStatsIconContainer}>
-                                <ExpoImage
-                                  source={{ uri: customBlendPreview }}
-                                  style={styles.emojiStatsIconImage}
-                                  contentFit="contain"
-                                />
-                              </View>
-                              <View style={styles.emojiStatsInfo}>
-                                <Text style={styles.emojiStatsName}>{blendDefinition.name}</Text>
-                                <Text style={styles.emojiStatsCategory}>
-                                  {CATEGORY_ICONS[blendDefinition.category]} {CATEGORY_LABELS[blendDefinition.category]}
-                                </Text>
-                              </View>
-                              <Pressable
-                                onPress={() => {
-                                  setCustomBlendPreview(null);
-                                  setCustomBlendDescription('');
-                                  setCustomBlendCost(null);
-                                }}
-                                style={styles.emojiStatsCloseButton}
-                              >
-                                <Text style={styles.emojiStatsCloseText}>×</Text>
+                              <Pressable onPress={() => {
+                                // Flip animation could be added here if needed
+                              }}>
+                                <View style={styles.emojiStatsIconContainer}>
+                                  <ExpoImage
+                                    key={`${customEmojiLeft}-${customEmojiRight}-${customBlendPreview}`}
+                                    source={{ uri: customBlendPreview }}
+                                    style={styles.emojiStatsIconImage}
+                                    contentFit="contain"
+                                    cachePolicy="none"
+                                    transition={200}
+                                  />
+                                </View>
                               </Pressable>
+                              <View style={[styles.emojiStatsInfo, { flex: 1 }]}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  <Text style={[styles.emojiStatsName, { flex: 1 }]}>{blendDefinition.name}</Text>
+                                  {hasPremiumUpgrade && !isEditingBlendName && (
+                                    <Pressable 
+                                      onPress={() => {
+                                        setEditedBlendName(blendDefinition.name);
+                                        setIsEditingBlendName(true);
+                                      }}
+                                      hitSlop={8}
+                                    >
+                                      <Text style={{ fontSize: 20 }}>✏️</Text>
+                                    </Pressable>
+                                  )}
+                                </View>
+                                {isEditingBlendName && (
+                                  <View style={styles.editNameContainer}>
+                                    <TextInput
+                                      style={styles.editNameInput}
+                                      value={editedBlendName}
+                                      onChangeText={setEditedBlendName}
+                                      placeholder="Enter custom name"
+                                      maxLength={40}
+                                      autoFocus
+                                    />
+                                    <View style={styles.editNameActions}>
+                                      <Pressable 
+                                        onPress={() => {
+                                          if (editedBlendName.trim()) {
+                                            setCustomEmojiName(blendDefinition.id, editedBlendName.trim());
+                                          }
+                                          setIsEditingBlendName(false);
+                                        }}
+                                        style={styles.editNameSaveButton}
+                                      >
+                                        <Text style={styles.editNameSaveText}>Save</Text>
+                                      </Pressable>
+                                      <Pressable 
+                                        onPress={() => {
+                                          setIsEditingBlendName(false);
+                                          setEditedBlendName('');
+                                        }}
+                                        style={styles.editNameCancelButton}
+                                      >
+                                        <Text style={styles.editNameCancelText}>Cancel</Text>
+                                      </Pressable>
+                                    </View>
+                                  </View>
+                                )}
+                              </View>
                             </View>
                             <View style={styles.emojiStatsDetails}>
                               <Text style={styles.emojiStatsDescription}>{formatEmojiDescription(blendDefinition as any)}</Text>
@@ -2454,23 +2599,42 @@ export function GardenSection({
                         );
                       }
 
+                      // If we have a preview but it's not owned, show the purchase preview
+                      if (customBlendPreview) {
+                        return (
+                          <View style={styles.customBlendPreviewRow}>
+                            <View style={styles.customBlendImageContainer}>
+                              <ExpoImage
+                                key={`${customEmojiLeft}-${customEmojiRight}-${customBlendPreview}`}
+                                source={{ uri: customBlendPreview }}
+                                style={styles.customBlendImage}
+                                contentFit="contain"
+                                cachePolicy="none"
+                                transition={200}
+                              />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.customBlendName} numberOfLines={2}>
+                                {customBlendDescription ? formatCustomEmojiName(customBlendDescription) : 'Emoji Kitchen blend'}
+                              </Text>
+                              <Text style={styles.customBlendPrice}>
+                                Costs {formatClickValue(customBlendCost ?? computeKitchenEmojiCost(compositeEmoji))}{' '}
+                                clicks
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      }
+
+                      // Fallback: if no preview and not loading, show message
                       return (
                         <View style={styles.customBlendPreviewRow}>
-                          <View style={styles.customBlendImageContainer}>
-                            <ExpoImage
-                              source={{ uri: customBlendPreview }}
-                              style={styles.customBlendImage}
-                              contentFit="contain"
-                            />
+                          <View style={[styles.customBlendImageContainer, { backgroundColor: '#f1f5f9' }]}>
+                            <Text style={{ fontSize: 32 }}>🎨</Text>
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.customBlendName} numberOfLines={2}>
-                              {customBlendDescription ? formatCustomEmojiName(customBlendDescription) : 'Emoji Kitchen blend'}
-                            </Text>
-                            <Text style={styles.customBlendPrice}>
-                              Costs {formatClickValue(customBlendCost ?? computeKitchenEmojiCost(compositeEmoji))}{' '}
-                              clicks
-                            </Text>
+                            <Text style={{ fontSize: 14, color: '#64748b', fontWeight: '600' }}>Ready to blend</Text>
+                            <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>Adjust emojis above</Text>
                           </View>
                         </View>
                       );
@@ -2564,7 +2728,7 @@ export function GardenSection({
                                 {shopPreview.name}
                               </Text>
                               <Text style={{ fontSize: 14, color: '#64748b', marginTop: 2 }}>
-                                {shopPreview.owned ? 'Owned' : `${formatClickValue(shopPreview.cost)} lettuce`}
+                                {shopPreview.owned ? 'Owned' : `${formatClickValue(shopPreview.cost)} clicks`}
                               </Text>
                             </View>
                             <Pressable
@@ -2730,50 +2894,96 @@ export function GardenSection({
                   </Pressable>
                 ) : null}
               </View>
-              <View style={styles.collectionSummary}>
-                <Text style={styles.collectionSummaryLabel}>Your emoji collection</Text>
-                <Text style={styles.collectionSummaryValue}>{collectionProgressLabel}</Text>
-                <Text style={styles.collectionSummaryHint}>
-                  Every emoji you buy or add is saved, even when a harvest resets.
-                </Text>
-              </View>
               {selectedInventoryEmoji && (
                   <View style={styles.emojiStatsContainer}>
                     <View style={styles.emojiStatsHeader}>
-                      <View style={styles.emojiStatsIconContainer}>
-                        {selectedInventoryEmoji.imageUrl ? (
-                          <ExpoImage
-                            source={{ uri: selectedInventoryEmoji.imageUrl }}
-                            style={styles.emojiStatsIconImage}
-                            contentFit="contain"
-                          />
-                        ) : (
-                          <Text style={styles.emojiStatsIcon}>{selectedInventoryEmoji.emoji}</Text>
+                      <Pressable onPress={handleInventoryEmojiIconFlip}>
+                        <RNAnimated.View 
+                          style={[
+                            styles.emojiStatsIconContainer,
+                            {
+                              transform: [{ 
+                                rotateY: inventoryFlipAnimation.interpolate({
+                                  inputRange: [0, 1],
+                                  outputRange: ['0deg', '360deg'],
+                                })
+                              }],
+                            },
+                          ]}
+                        >
+                          {selectedInventoryEmoji.imageUrl ? (
+                            <ExpoImage
+                              source={{ uri: selectedInventoryEmoji.imageUrl }}
+                              style={styles.emojiStatsIconImage}
+                              contentFit="contain"
+                            />
+                          ) : (
+                            <Text style={styles.emojiStatsIcon}>{selectedInventoryEmoji.emoji}</Text>
+                          )}
+                        </RNAnimated.View>
+                      </Pressable>
+                      <View style={[styles.emojiStatsInfo, { flex: 1 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={[styles.emojiStatsName, { flex: 1 }]}>{selectedInventoryEmoji.name}</Text>
+                          {hasPremiumUpgrade && !isEditingInventoryName && (
+                            <Pressable 
+                              onPress={() => {
+                                setEditedInventoryName(selectedInventoryEmoji.name);
+                                setIsEditingInventoryName(true);
+                              }}
+                              hitSlop={8}
+                            >
+                              <Text style={{ fontSize: 20 }}>✏️</Text>
+                            </Pressable>
+                          )}
+                        </View>
+                        {isEditingInventoryName && (
+                          <View style={styles.editNameContainer}>
+                            <TextInput
+                              style={styles.editNameInput}
+                              value={editedInventoryName}
+                              onChangeText={setEditedInventoryName}
+                              placeholder="Enter custom name"
+                              maxLength={40}
+                              autoFocus
+                            />
+                            <View style={styles.editNameActions}>
+                              <Pressable 
+                                onPress={() => {
+                                  if (editedInventoryName.trim()) {
+                                    setCustomEmojiName(selectedInventoryEmoji.id, editedInventoryName.trim());
+                                  }
+                                  setIsEditingInventoryName(false);
+                                }}
+                                style={styles.editNameSaveButton}
+                              >
+                                <Text style={styles.editNameSaveText}>Save</Text>
+                              </Pressable>
+                              <Pressable 
+                                onPress={() => {
+                                  setIsEditingInventoryName(false);
+                                  setEditedInventoryName('');
+                                }}
+                                style={styles.editNameCancelButton}
+                              >
+                                <Text style={styles.editNameCancelText}>Cancel</Text>
+                              </Pressable>
+                            </View>
+                          </View>
                         )}
                       </View>
-                      <View style={styles.emojiStatsInfo}>
-                        <Text style={styles.emojiStatsName}>{selectedInventoryEmoji.name}</Text>
-                      <Text style={styles.emojiStatsCategory}>
-                        {CATEGORY_ICONS[selectedInventoryEmoji.category]} {CATEGORY_LABELS[selectedInventoryEmoji.category]}
-                      </Text>
                     </View>
-                    <Pressable
-                      onPress={() => setSelectedInventoryEmoji(null)}
-                      style={styles.emojiStatsCloseButton}>
-                      <Text style={styles.emojiStatsCloseText}>×</Text>
-                    </Pressable>
-                  </View>
-                  <View style={styles.emojiStatsDetails}>
-                    <Text style={styles.emojiStatsDescription}>{formatEmojiDescription(selectedInventoryEmoji)}</Text>
-                    <View style={styles.emojiStatsTags}>
-                      {selectedInventoryEmoji.tags.slice(0, 3).map((tag, index) => (
-                        <View key={index} style={styles.emojiStatsTag}>
-                          <Text style={styles.emojiStatsTagText}>#{tag}</Text>
-                        </View>
-                      ))}
+                    <View style={styles.emojiStatsDetails}>
+                      <Text style={styles.emojiStatsDescription}>{formatEmojiDescription(selectedInventoryEmoji)}</Text>
+                      <View style={styles.emojiStatsTags}>
+                        {selectedInventoryEmoji.tags.slice(0, 3).map((tag, index) => (
+                          <View key={index} style={styles.emojiStatsTag}>
+                            <Text style={styles.emojiStatsTagText}>#{tag}</Text>
+                          </View>
+                        ))}
+                      </View>
                     </View>
                   </View>
-                </View>
               )}
             </View>
             <View style={styles.categoryFilterBlock}>
@@ -2860,6 +3070,7 @@ type InventoryTileItemProps = {
   onInventorySelect?: (item: InventoryEntry) => void;
   onInventoryLongPress?: (item: InventoryEntry) => void;
   isInWallet?: boolean;
+  walletColor?: string;
   onLayout: (event: LayoutChangeEvent) => void;
   beginDrag: (emojiId: string, index: number) => void;
   updateDrag: (dx: number, dy: number) => void;
@@ -2880,6 +3091,7 @@ function InventoryTileItem({
   onInventorySelect,
   onInventoryLongPress,
   isInWallet,
+  walletColor = '#f59e0b',
   onLayout,
   beginDrag,
   updateDrag,
@@ -2972,7 +3184,7 @@ function InventoryTileItem({
             styles.shopTile,
             isSelected && styles.shopTilePressed,
             isDragging && styles.shopTilePressed,
-            isInWallet && styles.walletHighlight,
+            isInWallet && { borderColor: walletColor, borderWidth: 3 },
           ]}
           onPress={() => {
             if (draggingIdRef.current) {
@@ -4835,6 +5047,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    gap: 12,
   },
   emojiStatsIconContainer: {
     width: 56,
@@ -4843,7 +5056,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
     borderWidth: 2,
     borderColor: '#22c55e',
     shadowColor: 'rgba(34, 197, 94, 0.2)',
@@ -4899,18 +5111,46 @@ const styles = StyleSheet.create({
     color: '#166534',
     fontWeight: '600',
   },
-  emojiStatsCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 8,
+  editNameContainer: {
+    marginTop: 8,
+    gap: 8,
   },
-  emojiStatsCloseText: {
-    fontSize: 20,
-    color: '#64748b',
+  editNameInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 16,
+    color: '#0f172a',
+  },
+  editNameActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editNameSaveButton: {
+    flex: 1,
+    backgroundColor: '#16a34a',
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  editNameSaveText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  editNameCancelButton: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  editNameCancelText: {
+    color: '#374151',
+    fontSize: 14,
     fontWeight: '600',
   },
   walletContainer: {

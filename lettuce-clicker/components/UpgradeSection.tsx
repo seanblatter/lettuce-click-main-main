@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -31,10 +31,25 @@ const formatEmojiDescription = (entry: EmojiDefinition) => {
     return 'A fresh garden accent ready to brighten your park.';
   }
 
+  // Get the displayed tags (first 3) to filter them out of description
+  const displayedTags = entry.tags.slice(0, 3).map(tag => tag.toLowerCase());
+  
   const readableTags = entry.tags
     .slice(0, 5)
+    .filter(tag => {
+      // Remove tags that are shown as hashtags (first 3 tags)
+      const normalized = tag.toLowerCase().replace(/[-_]/g, ' ');
+      return !displayedTags.some(displayedTag => {
+        const displayedNormalized = displayedTag.toLowerCase().replace(/[-_]/g, ' ');
+        return normalized === displayedNormalized || normalized.includes(displayedNormalized) || displayedNormalized.includes(normalized);
+      });
+    })
     .map((tag) => tag.replace(/[-_]/g, ' '))
     .map((tag) => tag.charAt(0).toUpperCase() + tag.slice(1));
+
+  if (readableTags.length === 0) {
+    return 'A unique decoration for your garden.';
+  }
 
   if (readableTags.length === 1) {
     return `${readableTags[0]} inspiration for your garden layouts.`;
@@ -123,6 +138,7 @@ export function UpgradeSection({
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
   const [isEditingEmojiName, setIsEditingEmojiName] = useState(false);
   const [editedEmojiName, setEditedEmojiName] = useState('');
+  const flipAnimation = useRef(new Animated.Value(0)).current;
 
   const ownedThemeCount = useMemo(
     () => sortedThemes.filter((theme) => ownedThemes[theme.id]).length,
@@ -190,12 +206,38 @@ export function UpgradeSection({
     if (!hasUnlockedEmojis) {
       return;
     }
-    setCollectionExpanded((prev) => !prev);
-  }, [hasUnlockedEmojis]);
+    setCollectionExpanded((prev) => {
+      const willExpand = !prev;
+      if (willExpand) {
+        // When expanding, select the newest emoji (last in the list)
+        if (unlockedEmojis.length > 0) {
+          setSelectedEmoji(unlockedEmojis[unlockedEmojis.length - 1].id);
+        }
+      } else {
+        // When collapsing, close the emoji details card
+        setSelectedEmoji(null);
+      }
+      return willExpand;
+    });
+  }, [hasUnlockedEmojis, unlockedEmojis]);
 
   const handleEmojiSelect = useCallback((emojiId: string) => {
     setSelectedEmoji((prev) => (prev === emojiId ? null : emojiId));
   }, []);
+
+  const handleEmojiIconFlip = useCallback(() => {
+    flipAnimation.setValue(0);
+    Animated.timing(flipAnimation, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [flipAnimation]);
+
+  const flipInterpolate = flipAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
   useEffect(() => {
     if (!hasUnlockedEmojis) {
@@ -267,30 +309,41 @@ export function UpgradeSection({
             {selectedEmojiDetails && (
               <View style={styles.emojiStatsContainer}>
                 <View style={styles.emojiStatsHeader}>
-                  <View style={styles.emojiStatsIconContainer}>
-                    {selectedEmojiDetails.imageUrl ? (
-                      <ExpoImage
-                        source={{ uri: selectedEmojiDetails.imageUrl }}
-                        style={styles.emojiStatsIconImage}
-                        contentFit="contain"
-                      />
-                    ) : (
-                      <Text style={styles.emojiStatsIcon}>{selectedEmojiDetails.emoji}</Text>
-                    )}
-                  </View>
-                  <View style={styles.emojiStatsInfo}>
-                    <Text style={styles.emojiStatsName}>{selectedEmojiDetails.name}</Text>
-                    {hasPremiumUpgrade && !isEditingEmojiName && (
-                      <Pressable 
-                        onPress={() => {
-                          setEditedEmojiName(selectedEmojiDetails.name);
-                          setIsEditingEmojiName(true);
-                        }}
-                        style={styles.editNameButton}
-                      >
-                        <Text style={styles.editNameButtonText}>✏️ Edit Name</Text>
-                      </Pressable>
-                    )}
+                  <Pressable onPress={handleEmojiIconFlip}>
+                    <Animated.View 
+                      style={[
+                        styles.emojiStatsIconContainer,
+                        {
+                          transform: [{ rotateY: flipInterpolate }],
+                        },
+                      ]}
+                    >
+                      {selectedEmojiDetails.imageUrl ? (
+                        <ExpoImage
+                          source={{ uri: selectedEmojiDetails.imageUrl }}
+                          style={styles.emojiStatsIconImage}
+                          contentFit="contain"
+                        />
+                      ) : (
+                        <Text style={styles.emojiStatsIcon}>{selectedEmojiDetails.emoji}</Text>
+                      )}
+                    </Animated.View>
+                  </Pressable>
+                  <View style={[styles.emojiStatsInfo, { flex: 1 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={[styles.emojiStatsName, { flex: 1 }]}>{selectedEmojiDetails.name}</Text>
+                      {hasPremiumUpgrade && !isEditingEmojiName && (
+                        <Pressable 
+                          onPress={() => {
+                            setEditedEmojiName(selectedEmojiDetails.name);
+                            setIsEditingEmojiName(true);
+                          }}
+                          hitSlop={8}
+                        >
+                          <Text style={{ fontSize: 20 }}>✏️</Text>
+                        </Pressable>
+                      )}
+                    </View>
                     {isEditingEmojiName && (
                       <View style={styles.editNameContainer}>
                         <TextInput
@@ -325,17 +378,7 @@ export function UpgradeSection({
                         </View>
                       </View>
                     )}
-                    <Text style={styles.emojiStatsCategory}>
-                      {CATEGORY_ICONS[selectedEmojiDetails.category]} {CATEGORY_LABELS[selectedEmojiDetails.category]}
-                    </Text>
                   </View>
-                  <Pressable
-                    onPress={() => setSelectedEmoji(null)}
-                    style={styles.emojiStatsCloseButton}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.emojiStatsCloseText}>×</Text>
-                  </Pressable>
                 </View>
                 <View style={styles.emojiStatsDetails}>
                   <Text style={styles.emojiStatsDescription}>{formatEmojiDescription(selectedEmojiDetails)}</Text>
@@ -1215,6 +1258,7 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
+    gap: 12,
   },
   emojiStatsIconContainer: {
     width: 56,
@@ -1223,7 +1267,6 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
     borderWidth: 2,
     borderColor: '#22c55e',
     shadowColor: 'rgba(34, 197, 94, 0.2)',

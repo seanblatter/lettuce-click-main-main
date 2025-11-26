@@ -121,6 +121,7 @@ type PassiveResumeNotice =
     });
 
 type GameContextValue = {
+  isLoading: boolean;
   harvest: number;
   lifetimeHarvest: number;
   formatLifetimeHarvest: (value?: number) => string;
@@ -602,6 +603,7 @@ type StoredGameState = {
 const GameContext = createContext<GameContextValue | undefined>(undefined);
 
 export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const [isLoading, setIsLoading] = useState(true);
   const [harvest, setHarvest] = useState(0);
   const [lifetimeHarvest, setLifetimeHarvest] = useState(0);
   const [profileLifetimeTotal, setProfileLifetimeTotal] = useState(0);
@@ -686,9 +688,34 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       return computeBellCurveCost(0.5);
     }
 
+    // Base hash for this emoji combination
     const hash = codePoints.reduce((accumulator, point) => (accumulator * 257 + point) % 1_000_003, 0);
-    const normalized = hash / 1_000_003;
-    return computeBellCurveCost(normalized);
+    const baseNormalized = hash / 1_000_003;
+    
+    // Scale the price range based on user's current wealth
+    // When poor (< 1000): mostly show cheaper options (shift distribution left)
+    // When rich (> 100M): show more expensive options (shift distribution right)
+    let wealthFactor = 0.5; // Default center
+    if (harvestRef.current < 1000) {
+      wealthFactor = 0.2; // Bias toward cheaper emojis
+    } else if (harvestRef.current < 10_000) {
+      wealthFactor = 0.3;
+    } else if (harvestRef.current < 100_000) {
+      wealthFactor = 0.4;
+    } else if (harvestRef.current < 1_000_000) {
+      wealthFactor = 0.5;
+    } else if (harvestRef.current < 10_000_000) {
+      wealthFactor = 0.6;
+    } else if (harvestRef.current < 100_000_000) {
+      wealthFactor = 0.7;
+    } else {
+      wealthFactor = 0.8; // Bias toward expensive emojis
+    }
+    
+    // Blend the emoji's natural hash with the wealth factor
+    const adjusted = baseNormalized * 0.7 + wealthFactor * 0.3;
+    
+    return computeBellCurveCost(adjusted);
   }, []);
 
   const pickCustomCategory = useCallback((emojiValue: string): EmojiCategory => {
@@ -1323,6 +1350,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }, [homeEmojiTheme, ownedThemes]);
 
   const value = useMemo<GameContextValue>(() => ({
+    isLoading,
     harvest,
     lifetimeHarvest,
     formatLifetimeHarvest: (value: number = lifetimeHarvest) => {
@@ -1467,6 +1495,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     addWidgetPromenadePhoto,
     removeWidgetPromenadePhoto,
   }), [
+    isLoading,
     harvest,
     lifetimeHarvest,
     profileLifetimeTotal,
@@ -1735,6 +1764,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       })
       .finally(() => {
         initialisedRef.current = true;
+        setIsLoading(false);
       });
   }, []);
 

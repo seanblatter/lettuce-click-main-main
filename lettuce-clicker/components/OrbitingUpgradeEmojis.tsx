@@ -1247,6 +1247,7 @@ function AuroraVeil({ emojis, radius, emojiStyle }: BasePatternProps) {
   const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
 
   const progress = useLoopingValue(AURORA_DURATION, 0, Easing.inOut(Easing.sin));
+  const ripple = useLoopingValue(AURORA_DURATION * 1.5, 0, Easing.inOut(Easing.cubic));
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
@@ -1263,6 +1264,15 @@ function AuroraVeil({ emojis, radius, emojiStyle }: BasePatternProps) {
           inputRange: [0, 0.5, 1],
           outputRange: [-AURORA_SHIFT, AURORA_SHIFT, -AURORA_SHIFT],
         });
+        
+        // Add horizontal ripple effect
+        const ripplePhase = columnPhase + 0.2;
+        const rippleShifted = Animated.modulo(Animated.add(ripple, ripplePhase), 1);
+        const translateX = rippleShifted.interpolate({
+          inputRange: [0, 0.25, 0.5, 0.75, 1],
+          outputRange: [0, 15, 0, -15, 0],
+        });
+        
         const skew = columnIndex % 2 === 0 ? '-6deg' : '6deg';
 
         return (
@@ -1272,7 +1282,7 @@ function AuroraVeil({ emojis, radius, emojiStyle }: BasePatternProps) {
               styles.columnContainer,
               {
                 transform: [
-                  { translateX: baseX },
+                  { translateX: Animated.add(baseX, translateX) },
                   { translateY },
                 ],
               },

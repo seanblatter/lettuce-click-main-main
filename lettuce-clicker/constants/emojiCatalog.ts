@@ -1,26 +1,25 @@
 import type { EmojiCategory, EmojiDefinition } from '@/context/GameContext';
 
 export const MIN_EMOJI_COST = 120;
-export const MAX_EMOJI_COST = 250_000;
+export const MAX_EMOJI_COST = 1_000_000_000;
 
-const GAUSSIAN_MEAN = 0.5;
-const GAUSSIAN_STD_DEV = 0.18;
+// Skewed distribution: 45% below 10M, only 5% near 1B
+const PRICE_THRESHOLD_10M = 10_000_000;
+const PERCENTILE_45 = 0.45; // 45% of items below 10M
+const PERCENTILE_95 = 0.95; // 95% of items below high-tier pricing
 
 const clampPercent = (value: number) => Math.min(Math.max(value, 0), 1);
 
-const gaussianWeight = (percent: number) => {
-  const normalized = (clampPercent(percent) - GAUSSIAN_MEAN) / GAUSSIAN_STD_DEV;
-  return Math.exp(-0.5 * normalized * normalized);
-};
-
-const MIN_WEIGHT = gaussianWeight(0);
-const MAX_WEIGHT = gaussianWeight(GAUSSIAN_MEAN);
-
+// Use exponential curve for heavily skewed distribution
 export const computeBellCurveCost = (percent: number) => {
-  const weight = gaussianWeight(percent);
-  const span = MAX_WEIGHT - MIN_WEIGHT;
-  const normalized = span === 0 ? 0 : (weight - MIN_WEIGHT) / span;
-  const cost = MIN_EMOJI_COST + normalized * (MAX_EMOJI_COST - MIN_EMOJI_COST);
+  const p = clampPercent(percent);
+  
+  // Apply exponential curve: most items cheap, few items very expensive
+  // Using power of 3.5 to create strong right skew
+  const skewed = Math.pow(p, 3.5);
+  
+  // Map to price range
+  const cost = MIN_EMOJI_COST + skewed * (MAX_EMOJI_COST - MIN_EMOJI_COST);
   return Math.round(cost);
 };
 
