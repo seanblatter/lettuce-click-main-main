@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 // Use explicit extension to help TS resolver
 import FlappyLettuceGame from './FlappyLettuceGame.tsx';
+import LettuceSlicerGame from './LettuceSlicerGame';
 import type { EmojiDefinition } from '@/context/GameContext';
 
 interface GamesHubProps {
@@ -20,7 +21,7 @@ interface GamesHubProps {
   customEmojiNames: Record<string, string>;
 }
 
-type GameScreen = 'hub' | 'flappy-lettuce' | 'lettuce-dash';
+type GameScreen = 'hub' | 'flappy-lettuce' | 'lettuce-slicer' | 'lettuce-dash';
 
 interface EmojiItem {
   emoji: string;
@@ -86,6 +87,10 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
     setCurrentScreen('flappy-lettuce');
   };
 
+  const handleOpenLettuceSlicer = () => {
+    setCurrentScreen('lettuce-slicer');
+  };
+
   const handleOpenLettuceDash = () => {
     // Placeholder for future game
     setCurrentScreen('lettuce-dash');
@@ -143,6 +148,27 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
               <Pressable
                 style={({ pressed }) => [
                   styles.gameCard,
+                  pressed && styles.gameCardPressed,
+                ]}
+                onPress={handleOpenLettuceSlicer}
+                accessibilityRole="button"
+                accessibilityLabel="Play Lettuce Slicer"
+              >
+                <View style={styles.gameIconContainer}>
+                  <Text style={styles.gameIcon}>🔪</Text>
+                </View>
+                <View style={styles.gameInfo}>
+                  <Text style={styles.gameTitle}>Lettuce Slicer</Text>
+                  <Text style={styles.gameDescription}>
+                    Slice emojis mid-air. Avoid bombs and ghosts!
+                  </Text>
+                </View>
+                <Text style={styles.gameChevron}>›</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.gameCard,
                   styles.gameCardDisabled,
                   pressed && styles.gameCardPressed,
                 ]}
@@ -172,6 +198,11 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
             customEmojiNames={emojiStringToName}
             selectedEmoji={selectedEmoji}
             onEmojiChange={setSelectedEmoji}
+          />
+        ) : currentScreen === 'lettuce-slicer' ? (
+          <LettuceSlicerGame
+            onBack={handleBackToHub}
+            ownedEmojis={ownedEmojiObjects}
           />
         ) : (
           <View style={styles.placeholderContainer}>
