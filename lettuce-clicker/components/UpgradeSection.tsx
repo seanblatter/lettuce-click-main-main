@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -58,6 +58,8 @@ type Props = {
   setHomeEmojiTheme: (theme: HomeEmojiTheme) => void;
   emojiCatalog: EmojiDefinition[];
   emojiInventory: Record<string, boolean>;
+  hasPremiumUpgrade: boolean;
+  setCustomEmojiName: (emojiId: string, newName: string) => void;
   title?: string;
 };
 
@@ -74,6 +76,8 @@ export function UpgradeSection({
   setHomeEmojiTheme,
   emojiCatalog,
   emojiInventory,
+  hasPremiumUpgrade,
+  setCustomEmojiName,
   title = 'Conservatory Upgrades',
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -117,6 +121,8 @@ export function UpgradeSection({
   const [activeSheet, setActiveSheet] = useState<'automation' | 'themes' | null>(null);
   const [collectionExpanded, setCollectionExpanded] = useState(false);
   const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
+  const [isEditingEmojiName, setIsEditingEmojiName] = useState(false);
+  const [editedEmojiName, setEditedEmojiName] = useState('');
 
   const ownedThemeCount = useMemo(
     () => sortedThemes.filter((theme) => ownedThemes[theme.id]).length,
@@ -274,6 +280,51 @@ export function UpgradeSection({
                   </View>
                   <View style={styles.emojiStatsInfo}>
                     <Text style={styles.emojiStatsName}>{selectedEmojiDetails.name}</Text>
+                    {hasPremiumUpgrade && !isEditingEmojiName && (
+                      <Pressable 
+                        onPress={() => {
+                          setEditedEmojiName(selectedEmojiDetails.name);
+                          setIsEditingEmojiName(true);
+                        }}
+                        style={styles.editNameButton}
+                      >
+                        <Text style={styles.editNameButtonText}>✏️ Edit Name</Text>
+                      </Pressable>
+                    )}
+                    {isEditingEmojiName && (
+                      <View style={styles.editNameContainer}>
+                        <TextInput
+                          style={styles.editNameInput}
+                          value={editedEmojiName}
+                          onChangeText={setEditedEmojiName}
+                          placeholder="Enter custom name"
+                          maxLength={40}
+                          autoFocus
+                        />
+                        <View style={styles.editNameActions}>
+                          <Pressable 
+                            onPress={() => {
+                              if (editedEmojiName.trim()) {
+                                setCustomEmojiName(selectedEmojiDetails.id, editedEmojiName.trim());
+                              }
+                              setIsEditingEmojiName(false);
+                            }}
+                            style={styles.editNameSaveButton}
+                          >
+                            <Text style={styles.editNameSaveText}>Save</Text>
+                          </Pressable>
+                          <Pressable 
+                            onPress={() => {
+                              setIsEditingEmojiName(false);
+                              setEditedEmojiName('');
+                            }}
+                            style={styles.editNameCancelButton}
+                          >
+                            <Text style={styles.editNameCancelText}>Cancel</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    )}
                     <Text style={styles.emojiStatsCategory}>
                       {CATEGORY_ICONS[selectedEmojiDetails.category]} {CATEGORY_LABELS[selectedEmojiDetails.category]}
                     </Text>
@@ -1160,15 +1211,6 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
   modalCloseText: {
     fontSize: 16,
   },
-  emojiStatsContainer: {
-    backgroundColor: '#f0fdf4',
-    borderRadius: 16,
-    marginHorizontal: 0,
-    marginBottom: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-  },
   emojiStatsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1256,5 +1298,95 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     borderWidth: 2,
     backgroundColor: '#f0fdf4',
     transform: [{ scale: 1.1 }],
+  },
+  emojiStatsContainer: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 16,
+    marginHorizontal: 0,
+    marginTop: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  emojiModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(15, 31, 23, 0.75)',
+    padding: 20,
+  },
+  emojiModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  emojiModalCard: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#bbf7d0',
+    maxWidth: 420,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+  editNameButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  editNameButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#166534',
+  },
+  editNameContainer: {
+    marginTop: 8,
+    gap: 8,
+  },
+  editNameInput: {
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#86efac',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  editNameActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editNameSaveButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+  },
+  editNameSaveText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  editNameCancelButton: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+  },
+  editNameCancelText: {
+    color: '#6b7280',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });

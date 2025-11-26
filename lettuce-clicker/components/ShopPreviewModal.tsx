@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  TextInput,
 } from 'react-native';
 import { formatClickValue } from '@/constants/emojiCatalog';
 
@@ -22,8 +23,10 @@ interface ShopPreviewModalProps {
   visible: boolean;
   item: InventoryEntry | null;
   harvest: number;
+  hasPremiumUpgrade?: boolean;
   onClose: () => void;
   onPurchase: (itemId: string) => boolean;
+  onRename?: (itemId: string, newName: string) => void;
 }
 
 const formatEmojiDescription = (entry: InventoryEntry) => {
@@ -49,15 +52,37 @@ export const ShopPreviewModal: React.FC<ShopPreviewModalProps> = ({
   visible,
   item,
   harvest,
+  hasPremiumUpgrade = false,
   onClose,
   onPurchase,
+  onRename,
 }) => {
+  const [isEditingName, setIsEditingName] = React.useState(false);
+  const [editedName, setEditedName] = React.useState('');
+  
   console.log('🎭 Modal render - visible:', visible, 'item:', item?.name || 'null');
   
   if (!item) {
     console.log('🚫 Modal: No item provided, returning null');
     return null;
   }
+
+  const handleStartEdit = () => {
+    setEditedName(item.name);
+    setIsEditingName(true);
+  };
+
+  const handleSaveName = () => {
+    if (editedName.trim() && onRename) {
+      onRename(item.id, editedName.trim());
+    }
+    setIsEditingName(false);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingName(false);
+    setEditedName('');
+  };
 
   const handlePurchase = () => {
     if (!item.owned) {
@@ -100,6 +125,31 @@ export const ShopPreviewModal: React.FC<ShopPreviewModalProps> = ({
           </View>
           
           <Text style={styles.title}>{item.name}</Text>
+          {hasPremiumUpgrade && item.owned && !isEditingName && (
+            <Pressable onPress={handleStartEdit} style={styles.editNameButton}>
+              <Text style={styles.editNameButtonText}>✏️ Edit Name</Text>
+            </Pressable>
+          )}
+          {isEditingName && (
+            <View style={styles.editNameContainer}>
+              <TextInput
+                style={styles.editNameInput}
+                value={editedName}
+                onChangeText={setEditedName}
+                placeholder="Enter custom name"
+                maxLength={40}
+                autoFocus
+              />
+              <View style={styles.editNameActions}>
+                <Pressable onPress={handleSaveName} style={styles.editNameSaveButton}>
+                  <Text style={styles.editNameSaveText}>Save</Text>
+                </Pressable>
+                <Pressable onPress={handleCancelEdit} style={styles.editNameCancelButton}>
+                  <Text style={styles.editNameCancelText}>Cancel</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
           <Text style={styles.description}>{formatEmojiDescription(item)}</Text>
           <Text style={styles.unicode}>
             Unicode: {item.emoji.codePointAt(0)?.toString(16).toUpperCase().padStart(4, '0')}
@@ -257,6 +307,62 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: '#0f5132',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  editNameButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#86efac',
+  },
+  editNameButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#166534',
+  },
+  editNameContainer: {
+    width: '100%',
+    gap: 10,
+  },
+  editNameInput: {
+    width: '100%',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#86efac',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  editNameActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  editNameSaveButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+  },
+  editNameSaveText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  editNameCancelButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+  },
+  editNameCancelText: {
+    color: '#6b7280',
     fontWeight: '600',
     fontSize: 15,
   },

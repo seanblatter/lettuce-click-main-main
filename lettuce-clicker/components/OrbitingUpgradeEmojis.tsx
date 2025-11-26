@@ -9,6 +9,7 @@ import {
   TextStyle,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import type { HomeEmojiTheme, OrbitingEmoji } from '@/context/GameContext';
 
@@ -25,14 +26,14 @@ const MATRIX_START_Y = -WINDOW_HEIGHT * 0.6;
 const MATRIX_END_Y = WINDOW_HEIGHT + 160;
 const MATRIX_EMOJI_SIZE = 26;
 const MATRIX_PADDING = 32;
-const MATRIX_COLUMNS = 7;
+const MATRIX_COLUMNS = 12;
 const MATRIX_DURATION_BASE = 2800;
-const MATRIX_DURATION_VARIATION = 1200;
-const MATRIX_DELAY_STEP = 90;
+const MATRIX_DURATION_VARIATION = 400;
+const MATRIX_DELAY_STEP = 20;
 
-const CONFETTI_DURATION_BASE = 1800;
-const CONFETTI_DURATION_VARIATION = 900;
-const CONFETTI_DELAY_STEP = 60;
+const CONFETTI_DURATION_BASE = 2200;
+const CONFETTI_DURATION_VARIATION = 1200;
+const CONFETTI_DELAY_STEP = 40;
 
 const FIRELY_ALPHA_BASE = 1600;
 const FIRELY_ALPHA_VARIATION = 2200;
@@ -58,11 +59,11 @@ const LAKE_FLOAT_VARIATION = 1600;
 const LAKE_SWAY_DURATION_BASE = 4200;
 const LAKE_SWAY_VARIATION = 2200;
 const LAKE_HORIZONTAL_SPAN = 1.1;
-const LAKE_DEPTH_MIN_RATIO = 0.95;
-const LAKE_DEPTH_VARIATION_RATIO = 0.55;
 const LAKE_FLOAT_AMPLITUDE_BASE = 4;
 const LAKE_FLOAT_AMPLITUDE_VARIATION = 6;
 const LAKE_SWAY_RANGE_RATIO = 0.04;
+const TAB_BAR_HEIGHT = 86; // 78px height + 8px margin
+const EMOJI_SIZE = 28; // Approximate emoji height
 
 const AURORA_DURATION = 12000;
 const AURORA_SHIFT = 42;
@@ -110,7 +111,7 @@ export function OrbitingUpgradeEmojis({
   radius = DEFAULT_RADIUS,
   theme = 'circle',
 }: OrbitingUpgradeEmojisProps) {
-  const limited = useMemo(() => emojis.slice(0, 96), [emojis]);
+  const limited = useMemo(() => emojis.slice(0, 300), [emojis]);
   const emojiColor = useMemo(() => getEmojiColorForTheme(theme), [theme]);
   const emojiStyle = useMemo<StyleProp<TextStyle>>(() => ({ color: emojiColor }), [emojiColor]);
 
@@ -205,7 +206,7 @@ function CircleOrbit({ emojis, radius, emojiStyle }: BasePatternProps) {
   );
 
   const positioned = useMemo(() => {
-    const limit = emojis.slice(0, 48);
+    const limit = emojis.slice(0, 300);
     return limit.map((item, index) => {
       const angle = (FULL_ROTATION_RADIANS * index) / Math.max(1, limit.length);
       return { ...item, angle, distance: radius };
@@ -257,7 +258,7 @@ function SpiralOrbit({ emojis, radius, emojiStyle }: BasePatternProps) {
   );
 
   const { placements, arms } = useMemo(() => {
-    const limit = emojis.slice(0, 72);
+    const limit = emojis.slice(0, 300);
     if (limit.length === 0) {
       return { placements: [] as SpiralPlacement[], arms: 1 };
     }
@@ -399,7 +400,15 @@ type LakeParticle = {
 };
 
 function LakePool({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const limit = useMemo(() => emojis.slice(0, 50), [emojis]);
+  const limit = useMemo(() => emojis.slice(0, 500), [emojis]);
+  
+  // Calculate where emojis should rest at the bottom, touching the footer navigator
+  const waterlineY = useMemo(() => {
+    // From center (0,0) to the exact position of the tab bar
+    // This puts emojis right at the footer, collecting on top of it
+    return (WINDOW_HEIGHT / 2) - TAB_BAR_HEIGHT + 100;
+  }, []);
+  
   const particles = useMemo<LakeParticle[]>(
     () =>
       limit.map((item, index) => {
@@ -413,13 +422,19 @@ function LakePool({ emojis, radius, emojiStyle }: BasePatternProps) {
           LAKE_FLOAT_DURATION_BASE + Math.floor(randomForKey(item.id, index + 28) * LAKE_FLOAT_VARIATION);
         const swayDuration =
           LAKE_SWAY_DURATION_BASE + Math.floor(randomForKey(item.id, index + 29) * LAKE_SWAY_VARIATION);
-        const startX =
-          radius * (randomForKey(item.id, index + 30) * LAKE_HORIZONTAL_SPAN - LAKE_HORIZONTAL_SPAN / 2);
-        const depth =
-          radius * (LAKE_DEPTH_MIN_RATIO + randomForKey(item.id, index + 31) * LAKE_DEPTH_VARIATION_RATIO);
+        // Spread emojis across the full width of the screen
+        const startX = (WINDOW_WIDTH / 2) * (randomForKey(item.id, index + 30) * 2 - 1) * 0.95;
+        // Calculate depth with controlled distribution to avoid slanting
+        // Use index-based layers with random offset for natural liquid look
+        const layerCount = 8; // Number of horizontal layers
+        const layer = index % layerCount; // Which layer this emoji is in
+        const layerHeight = 80 / layerCount; // Height of each layer (total 80px range)
+        const randomOffset = (randomForKey(item.id, index + 31) - 0.5) * layerHeight; // Random within layer
+        const depthVariation = (layer * layerHeight) + randomOffset;
+        const depth = waterlineY - depthVariation;
         const bobAmplitude =
           LAKE_FLOAT_AMPLITUDE_BASE + randomForKey(item.id, index + 32) * LAKE_FLOAT_AMPLITUDE_VARIATION;
-        const swayRange = radius * (LAKE_SWAY_RANGE_RATIO + randomForKey(item.id, index + 33) * 0.06);
+        const swayRange = 40 + randomForKey(item.id, index + 33) * 30; // Absolute pixel sway range
 
         return {
           id: item.id,
@@ -437,7 +452,7 @@ function LakePool({ emojis, radius, emojiStyle }: BasePatternProps) {
           swayRange,
         };
       }),
-    [limit, radius]
+    [limit, waterlineY]
   );
 
   const dropRefs = useRef<Animated.CompositeAnimation[]>([]);
@@ -535,7 +550,7 @@ function LakePool({ emojis, radius, emojiStyle }: BasePatternProps) {
       {sortedParticles.map((particle) => {
         const dropTranslate = particle.drop.interpolate({
           inputRange: [0, 0.7, 1],
-          outputRange: [-radius * 1.3, radius * 0.35, particle.depth],
+          outputRange: [-(WINDOW_HEIGHT / 2) - 100, 0, particle.depth],
         });
         const bobTranslate = particle.bob.interpolate({
           inputRange: [-1, 1],
@@ -600,12 +615,12 @@ function MatrixEmojiRain({ emojis, radius, variant }: MatrixEmojiRainProps) {
 
   useEffect(() => {
     setDrops((prev) => {
-      const limited = emojis.slice(0, Math.min(28, emojis.length));
+      const limited = emojis.slice(0, Math.min(96, emojis.length));
       const next: MatrixDrop[] = [];
       const retained = new Set<string>();
 
-      limited.forEach((emoji) => {
-        const column = getMatrixColumn(emoji.id);
+      limited.forEach((emoji, index) => {
+        const column = getMatrixColumn(emoji.id, index);
         const targetLeft = getMatrixLeft(column);
         const existing = prev.find((drop) => drop.id === emoji.id);
 
@@ -615,12 +630,12 @@ function MatrixEmojiRain({ emojis, radius, variant }: MatrixEmojiRainProps) {
             existing.left !== targetLeft || existing.column !== column || existing.variant !== variant;
           if (needsRefresh) {
             existing.loop.stop();
-            next.push(createMatrixDrop(emoji.id, column, targetLeft, variant));
+            next.push(createMatrixDrop(emoji.id, column, targetLeft, variant, index));
           } else {
             next.push(existing);
           }
         } else {
-          next.push(createMatrixDrop(emoji.id, column, targetLeft, variant));
+          next.push(createMatrixDrop(emoji.id, column, targetLeft, variant, index));
         }
       });
 
@@ -676,13 +691,18 @@ function MatrixEmojiRain({ emojis, radius, variant }: MatrixEmojiRainProps) {
   );
 }
 
-function createMatrixDrop(id: string, column: number, left: number, variant: HomeEmojiTheme): MatrixDrop {
+function createMatrixDrop(id: string, column: number, left: number, variant: HomeEmojiTheme, index: number): MatrixDrop {
   const animated = new Animated.Value(0);
   const duration = getMatrixDuration(column, variant);
+  
+  // Add staggered delay based on position in column to create cascading effect
+  const columnPosition = Math.floor(index / MATRIX_COLUMNS); // Which emoji in this column
+  const baseDelay = getMatrixDelay(column, variant);
+  const cascadeDelay = columnPosition * 300; // Tighter spacing for synchronized trailing
 
   const loop = Animated.loop(
     Animated.sequence([
-      Animated.delay(getMatrixDelay(column, variant)),
+      Animated.delay(baseDelay + cascadeDelay),
       Animated.timing(animated, {
         toValue: 1,
         duration,
@@ -715,13 +735,10 @@ function createMatrixDrop(id: string, column: number, left: number, variant: Hom
   };
 }
 
-function getMatrixColumn(id: string) {
-  let hash = 0;
-  for (let index = 0; index < id.length; index += 1) {
-    hash = (hash * 31 + id.charCodeAt(index)) & 0xffffffff;
-  }
-
-  return Math.abs(hash) % MATRIX_COLUMNS;
+function getMatrixColumn(id: string, index: number) {
+  // Allow multiple emojis per column by using modulo
+  // This distributes emojis across columns cyclically, allowing 3-8 emojis per column
+  return index % MATRIX_COLUMNS;
 }
 
 function getMatrixLeft(column: number) {
@@ -762,7 +779,7 @@ function BubbleSwirl({ emojis, radius, emojiStyle }: BasePatternProps) {
 
   const assignments = useMemo(() => {
     const buckets = ringConfigs.map(() => [] as OrbitingEmoji[]);
-    const limit = emojis.slice(0, 72);
+    const limit = emojis.slice(0, 300);
     limit.forEach((emoji, index) => {
       buckets[index % ringConfigs.length].push(emoji);
     });
@@ -869,7 +886,7 @@ function BubbleSwirl({ emojis, radius, emojiStyle }: BasePatternProps) {
 }
 
 function BubblePopBurst({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const limit = useMemo(() => emojis.slice(0, 48), [emojis]);
+  const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
   const burstValues = useMemo(() => limit.map((item, index) => ({
     value: new Animated.Value(0),
     delay: Math.floor(randomForKey(item.id, index) * 1600),
@@ -942,7 +959,7 @@ function BubblePopBurst({ emojis, radius, emojiStyle }: BasePatternProps) {
 }
 
 function WaveRibbon({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const limit = useMemo(() => emojis.slice(0, 42), [emojis]);
+  const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
   const wave = useLoopingValue(WAVE_DURATION);
   const width = radius * 2.8;
   const amplitude = radius * WAVE_AMPLITUDE_RATIO;
@@ -995,7 +1012,7 @@ function EchoPulse({ emojis, radius, emojiStyle }: BasePatternProps) {
   );
   const assignments = useMemo(() => {
     const buckets = rings.map(() => [] as OrbitingEmoji[]);
-    const limit = emojis.slice(0, 48);
+    const limit = emojis.slice(0, 300);
     limit.forEach((emoji, index) => {
       buckets[index % rings.length].push(emoji);
     });
@@ -1075,7 +1092,7 @@ function EchoPulse({ emojis, radius, emojiStyle }: BasePatternProps) {
 }
 
 function ConfettiStream({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const limit = useMemo(() => emojis.slice(0, 36), [emojis]);
+  const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
   const streams = useMemo(
     () => limit.map((item, index) => ({
       id: item.id,
@@ -1155,13 +1172,19 @@ function ConfettiStream({ emojis, radius, emojiStyle }: BasePatternProps) {
 }
 
 function LaserSweep({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const limit = useMemo(() => emojis.slice(0, 54), [emojis]);
-  const rotation = useLoopingValue(10000);
+  const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
+  const rotation = useLoopingValue(8000);
   const rotate = rotation.interpolate({
     inputRange: [0, 1],
     outputRange: ['0rad', `${FULL_ROTATION_RADIANS}rad`],
   });
-  const beamAngles = useMemo(() => [0, Math.PI / 4, Math.PI / 2, (3 * Math.PI) / 4], []);
+  
+  // Create 12 laser beams evenly distributed in a circle
+  const beamCount = 12;
+  const beamAngles = useMemo(() => 
+    Array.from({ length: beamCount }, (_, i) => (FULL_ROTATION_RADIANS * i) / beamCount),
+    []
+  );
 
   const beamAssignments = useMemo(() => {
     const beams = beamAngles.map(() => [] as OrbitingEmoji[]);
@@ -1173,30 +1196,46 @@ function LaserSweep({ emojis, radius, emojiStyle }: BasePatternProps) {
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
-      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>{
-        beamAssignments.map((beam, index) => (
-          <View key={`laser-beam-${index}`} style={[styles.beamContainer, { transform: [{ rotate: `${beamAngles[index]}rad` }] }]}>{
-            beam.map((emoji, emojiIndex) => {
-              const distance = radius * (0.4 + emojiIndex * 0.35);
+      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>
+        {beamAssignments.map((beam, beamIndex) => (
+          <View 
+            key={`laser-beam-${beamIndex}`} 
+            style={[
+              styles.beamContainer, 
+              { transform: [{ rotate: `${beamAngles[beamIndex]}rad` }] }
+            ]}
+          >
+            {/* Laser beam gradient effect */}
+            <LinearGradient
+              colors={['rgba(255, 0, 0, 0)', 'rgba(255, 0, 0, 0.15)', 'rgba(255, 0, 0, 0)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{
+                position: 'absolute',
+                width: radius * 2.5,
+                height: 3,
+                left: 0,
+              }}
+            />
+            {beam.map((emoji, emojiIndex) => {
+              const distance = radius * (0.3 + emojiIndex * 0.25);
               return (
                 <View
                   key={emoji.id}
                   style={[
                     styles.emojiWrapper,
                     {
-                      transform: [
-                        { translateX: distance },
-                      ],
+                      transform: [{ translateX: distance }],
                     },
                   ]}
                 >
                   <Text style={[styles.emoji, emojiStyle, styles.emojiLaser]}>{emoji.emoji}</Text>
                 </View>
               );
-            })
-          }</View>
-        ))
-      }</Animated.View>
+            })}
+          </View>
+        ))}
+      </Animated.View>
     </View>
   );
 }
@@ -1205,7 +1244,7 @@ function AuroraVeil({ emojis, radius, emojiStyle }: BasePatternProps) {
   const columns = useMemo(() => Math.max(2, Math.min(5, Math.ceil(emojis.length / 4))), [emojis.length]);
   const columnWidth = radius * 2.4;
   const segmentHeight = radius * 0.45;
-  const limit = useMemo(() => emojis.slice(0, columns * 4), [columns, emojis]);
+  const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
 
   const progress = useLoopingValue(AURORA_DURATION, 0, Easing.inOut(Easing.sin));
 
@@ -1254,14 +1293,30 @@ function AuroraVeil({ emojis, radius, emojiStyle }: BasePatternProps) {
 }
 
 function FireflyField({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const limit = useMemo(() => emojis.slice(0, 40), [emojis]);
+  const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
   const flickers = useMemo(
-    () => limit.map((item, index) => ({
-      value: new Animated.Value(0),
-      duration:
-        FIRELY_ALPHA_BASE + Math.floor(randomForKey(item.id, index + 14) * FIRELY_ALPHA_VARIATION),
-      offset: Math.floor(randomForKey(item.id, index + 15) * 1800),
-    })),
+    () => limit.map((item, index) => {
+      // Use multiple different hash offsets to break any patterns
+      const xHash1 = randomForKey(item.id, index * 7 + 123);
+      const xHash2 = randomForKey(item.id, index * 13 + 456);
+      const xHash3 = randomForKey(item.id, index * 19 + 678);
+      const yHash1 = randomForKey(item.id, index * 11 + 789);
+      const yHash2 = randomForKey(item.id, index * 17 + 234);
+      const yHash3 = randomForKey(item.id, index * 23 + 901);
+      
+      // Combine multiple hashes to create more random distribution across full screen
+      const posX = ((xHash1 + xHash2 + xHash3) / 3) * WINDOW_WIDTH;
+      const posY = ((yHash1 + yHash2 + yHash3) / 3) * WINDOW_HEIGHT;
+      
+      return {
+        value: new Animated.Value(0),
+        duration:
+          FIRELY_ALPHA_BASE + Math.floor(randomForKey(item.id, index + 14) * FIRELY_ALPHA_VARIATION),
+        offset: Math.floor(randomForKey(item.id, index + 15) * 1800),
+        posX,
+        posY,
+      };
+    }),
     [limit]
   );
 
@@ -1295,29 +1350,23 @@ function FireflyField({ emojis, radius, emojiStyle }: BasePatternProps) {
   return (
     <View pointerEvents="none" style={styles.wrapper}>
       {limit.map((emoji, index) => {
-        const randomX = radius * (randomForKey(emoji.id, index + 16) * 2 - 1);
-        const randomY = radius * (randomForKey(emoji.id, index + 17) * 2 - 1);
+        const { posX, posY } = flickers[index];
         const progress = flickers[index].value;
-        const translateX = progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [randomX * 0.92, randomX],
-        });
-        const translateY = progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [randomY * 0.92, randomY],
-        });
         const opacity = progress.interpolate({
           inputRange: [0, 0.5, 1],
-          outputRange: [0.15, 1, 0.2],
+          outputRange: [0.1, 1, 0.1],
         });
 
         return (
           <Animated.View
             key={emoji.id}
             style={[
-              styles.emojiWrapper,
               {
-                transform: [{ translateX }, { translateY }],
+                position: 'absolute',
+                left: posX,
+                top: posY,
+              },
+              {
                 opacity,
               },
             ]}
@@ -1331,7 +1380,7 @@ function FireflyField({ emojis, radius, emojiStyle }: BasePatternProps) {
 }
 
 function StarlightHalo({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const limit = useMemo(() => emojis.slice(0, 50), [emojis]);
+  const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
   const rotation = useLoopingValue(20000);
   const rotate = rotation.interpolate({
     inputRange: [0, 1],
@@ -1339,7 +1388,7 @@ function StarlightHalo({ emojis, radius, emojiStyle }: BasePatternProps) {
   });
 
   const points = useMemo(() => {
-    const vertices = 5;
+    const vertices = 8;
     const innerRadius = radius * 0.55;
     const outerRadius = radius * 1.05;
     return Array.from({ length: vertices * 2 }, (_, index) =>
@@ -1386,7 +1435,7 @@ function StarlightHalo({ emojis, radius, emojiStyle }: BasePatternProps) {
 }
 
 function NebulaSwirl({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const limit = useMemo(() => emojis.slice(0, 64), [emojis]);
+  const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
   const rotation = useLoopingValue(NEBULA_DURATION, 0, Easing.inOut(Easing.quad));
   const rotate = rotation.interpolate({
     inputRange: [0, 1],
@@ -1441,7 +1490,7 @@ function NebulaSwirl({ emojis, radius, emojiStyle }: BasePatternProps) {
 }
 
 function SupernovaBurst({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const limit = useMemo(() => emojis.slice(0, 40), [emojis]);
+  const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
   const progress = useLoopingValue(SUPER_NOVA_DURATION, 0, Easing.inOut(Easing.quad));
 
   return (
@@ -1538,9 +1587,9 @@ const styles = StyleSheet.create({
     textShadowRadius: 7,
   },
   emojiLaser: {
-    textShadowColor: '#f472b6',
+    textShadowColor: 'rgba(239, 68, 68, 0.95)',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
+    textShadowRadius: 16,
   },
   emojiAurora: {
     textShadowColor: '#a855f7',
@@ -1575,9 +1624,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     fontSize: 24,
     color: '#bbf7d0',
-    textShadowColor: 'rgba(15, 118, 110, 0.6)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
+    textShadowColor: 'rgba(34, 197, 94, 0.9)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
   },
   beamContainer: {
     position: 'absolute',

@@ -64,6 +64,7 @@ type Props = {
   gardenBackgroundColor: string;
   hasPremiumUpgrade: boolean;
   purchasePremiumUpgrade: () => void;
+  setCustomEmojiName: (emojiId: string, newName: string) => void;
   title?: string;
 };
 
@@ -297,6 +298,7 @@ export function GardenSection({
   gardenBackgroundColor,
   hasPremiumUpgrade,
   purchasePremiumUpgrade,
+  setCustomEmojiName,
   title = 'Lettuce Gardens',
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -730,7 +732,18 @@ export function GardenSection({
       return priceSortOrder === 'asc' ? a.cost - b.cost : b.cost - a.cost;
     };
 
-    return [...baseList].sort(sorter);
+    const sorted = [...baseList].sort(sorter);
+    
+    // Debug logging for custom blends
+    if (activeCategory === 'custom') {
+      const customItems = inventoryList.filter(item => item.id.startsWith('custom-'));
+      console.log('🧪 DEBUG Custom Category:');
+      console.log('  - Total custom items in inventory:', customItems.length);
+      console.log('  - Filtered custom items:', sorted.length);
+      console.log('  - Custom items:', customItems.map(i => ({ id: i.id, name: i.name, hasImage: !!i.imageUrl })));
+    }
+
+    return sorted;
   }, [
     inventoryList,
     matchesCategory,
@@ -738,6 +751,7 @@ export function GardenSection({
     normalizedEmojiTokens.length,
     normalizedFilter,
     priceSortOrder,
+    activeCategory,
   ]);
   const filteredOwnedInventory = useMemo(() => {
     const filtered = ownedInventory.filter((item) => matchesCategory(item) && matchesFilter(item));
@@ -1460,6 +1474,12 @@ export function GardenSection({
     [totalCollected]
   );
   const handleDismissShopPreview = useCallback(() => setShopPreview(null), []);
+  
+  const handlePurchaseShopPreview = useCallback((itemId: string) => {
+    const success = purchaseEmoji(itemId);
+    return success;
+  }, [purchaseEmoji]);
+  
   const handleUnlockPreview = () => {
     if (!shopPreview) {
       return;
@@ -1684,7 +1704,7 @@ export function GardenSection({
             You have harvested {formatHarvestDisplay(harvest)} clicks.
           </Text>
           <Text style={[styles.harvestHint, isLandscape && styles.harvestHintLandscape]}>
-            Your harvest bankroll is ready—shop curated emoji sets and paint the garden to life.
+            You have harvested {totalCollected.toLocaleString()} emojis / 100,000+
           </Text>
         </View>
 
@@ -2494,108 +2514,115 @@ export function GardenSection({
               </View>
             )}
 
-            {/* Shop Preview Section - Shows selected emoji details (only for non-custom emojis) */}
-            {shopPreview && !shopPreview.id.startsWith('custom-') && (
-              <View style={{
-                backgroundColor: '#f0f9ff',
-                borderWidth: 2,
-                borderColor: '#0ea5e9',
-                borderRadius: 12,
-                padding: 16,
-                margin: 16,
-                marginBottom: 8,
-              }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                  <View style={{
-                    width: 60,
-                    height: 60,
-                    borderRadius: 30,
-                    backgroundColor: '#ffffff',
-                    borderWidth: 2,
-                    borderColor: shopPreview.owned ? '#16a34a' : '#f59e0b',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    marginRight: 12,
-                  }}>
-                    {shopPreview.imageUrl ? (
-                      <ExpoImage
-                        source={{ uri: shopPreview.imageUrl }}
-                        style={styles.previewEmojiImage}
-                        contentFit="contain"
-                      />
-                    ) : (
-                      <Text style={{ fontSize: 32 }}>{shopPreview.emoji}</Text>
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0f172a' }}>
-                      {shopPreview.name}
-                    </Text>
-                    <Text style={{ fontSize: 14, color: '#64748b', marginTop: 2 }}>
-                      {shopPreview.owned ? 'Owned' : `${formatClickValue(shopPreview.cost)} lettuce`}
-                    </Text>
-                  </View>
-                  <Pressable
-                    style={{ padding: 8 }}
-                    onPress={() => setShopPreview(null)}
-                  >
-                    <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
-                  </Pressable>
-                </View>
-                
-                {shopPreview.tags.length > 0 && (
-                  <Text style={{ fontSize: 14, color: '#374151', marginBottom: 12 }}>
-                    {shopPreview.tags.slice(0, 3).join(' • ')}
-                  </Text>
-                )}
-                
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  {!shopPreview.owned && (
-                    <Pressable
-                      style={{
-                        backgroundColor: '#16a34a',
-                        paddingHorizontal: 20,
-                        paddingVertical: 10,
-                        borderRadius: 8,
-                        flex: 1,
-                      }}
-                      onPress={() => {
-                        const success = purchaseEmoji(shopPreview.id);
-                        if (success) {
-                          setShopPreview(null);
-                        }
-                      }}
-                    >
-                      <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
-                        Buy for {formatClickValue(shopPreview.cost)}
-                      </Text>
-                    </Pressable>
-                  )}
-                  <Pressable
-                    style={{
-                      backgroundColor: '#f3f4f6',
-                      paddingHorizontal: 20,
-                      paddingVertical: 10,
-                      borderRadius: 8,
-                      flex: shopPreview.owned ? 1 : 0,
-                    }}
-                    onPress={() => setShopPreview(null)}
-                  >
-                    <Text style={{ color: '#374151', fontWeight: '500', textAlign: 'center' }}>
-                      {shopPreview.owned ? 'Close' : 'Cancel'}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            )}
-            
             <View style={[styles.sheetList, isLandscape && styles.sheetListLandscape, styles.sheetListContent, isLandscape && styles.sheetListContentLandscape]}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {filteredShopInventory.map((item, index) => (
-                  <View key={item.id} style={{ width: `${100 / responsiveGridColumns - 2}%` }}>
-                    {renderShopItem({ item, index, separators: { highlight: () => {}, unhighlight: () => {}, updateProps: () => {} } })}
-                  </View>
-                ))}
+                {filteredShopInventory.map((item, index) => {
+                  const isLastInRow = (index + 1) % responsiveGridColumns === 0 || index === filteredShopInventory.length - 1;
+                  const currentRow = Math.floor(index / responsiveGridColumns);
+                  const selectedRow = shopPreview ? Math.floor(filteredShopInventory.findIndex(i => i.id === shopPreview.id) / responsiveGridColumns) : -1;
+                  const shouldShowPreviewAfter = shopPreview && !shopPreview.id.startsWith('custom-') && selectedRow === currentRow && isLastInRow;
+                  
+                  return (
+                    <React.Fragment key={item.id}>
+                      <View style={{ width: `${100 / responsiveGridColumns - 2}%` }}>
+                        {renderShopItem({ item, index, separators: { highlight: () => {}, unhighlight: () => {}, updateProps: () => {} } })}
+                      </View>
+                      {shouldShowPreviewAfter && (
+                        <View style={{
+                          width: '100%',
+                          backgroundColor: '#f0f9ff',
+                          borderWidth: 2,
+                          borderColor: '#0ea5e9',
+                          borderRadius: 12,
+                          padding: 16,
+                          marginVertical: 8,
+                        }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                            <View style={{
+                              width: 60,
+                              height: 60,
+                              borderRadius: 30,
+                              backgroundColor: '#ffffff',
+                              borderWidth: 2,
+                              borderColor: shopPreview.owned ? '#16a34a' : '#f59e0b',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              marginRight: 12,
+                            }}>
+                              {shopPreview.imageUrl ? (
+                                <ExpoImage
+                                  source={{ uri: shopPreview.imageUrl }}
+                                  style={styles.previewEmojiImage}
+                                  contentFit="contain"
+                                />
+                              ) : (
+                                <Text style={{ fontSize: 32 }}>{shopPreview.emoji}</Text>
+                              )}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#0f172a' }}>
+                                {shopPreview.name}
+                              </Text>
+                              <Text style={{ fontSize: 14, color: '#64748b', marginTop: 2 }}>
+                                {shopPreview.owned ? 'Owned' : `${formatClickValue(shopPreview.cost)} lettuce`}
+                              </Text>
+                            </View>
+                            <Pressable
+                              style={{ padding: 8 }}
+                              onPress={() => setShopPreview(null)}
+                            >
+                              <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
+                            </Pressable>
+                          </View>
+                          
+                          {shopPreview.tags.length > 0 && (
+                            <Text style={{ fontSize: 14, color: '#374151', marginBottom: 12 }}>
+                              {shopPreview.tags.slice(0, 3).join(' • ')}
+                            </Text>
+                          )}
+                          
+                          <View style={{ flexDirection: 'row', gap: 12 }}>
+                            {!shopPreview.owned && (
+                              <Pressable
+                                style={{
+                                  backgroundColor: '#16a34a',
+                                  paddingHorizontal: 20,
+                                  paddingVertical: 10,
+                                  borderRadius: 8,
+                                  flex: 1,
+                                }}
+                                onPress={() => {
+                                  const success = purchaseEmoji(shopPreview.id);
+                                  if (success) {
+                                    setShopPreview(null);
+                                  }
+                                }}
+                              >
+                                <Text style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
+                                  Buy for {formatClickValue(shopPreview.cost)}
+                                </Text>
+                              </Pressable>
+                            )}
+                            <Pressable
+                              style={{
+                                backgroundColor: '#f3f4f6',
+                                paddingHorizontal: 20,
+                                paddingVertical: 10,
+                                borderRadius: 8,
+                                flex: shopPreview.owned ? 1 : 0,
+                              }}
+                              onPress={() => setShopPreview(null)}
+                            >
+                              <Text style={{ color: '#374151', fontWeight: '500', textAlign: 'center' }}>
+                                {shopPreview.owned ? 'Close' : 'Cancel'}
+                              </Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </View>
               {/* Scrolling placeholder removed - no test content */}
             </View>
@@ -2799,6 +2826,17 @@ export function GardenSection({
       </Modal>
       </View>
       
+      {shopPreview && (
+        <ShopPreviewModal
+          visible={true}
+          item={shopPreview}
+          harvest={harvest}
+          hasPremiumUpgrade={hasPremiumUpgrade}
+          onClose={handleDismissShopPreview}
+          onPurchase={handlePurchaseShopPreview}
+          onRename={setCustomEmojiName}
+        />
+      )}
 
     </Fragment>
   );

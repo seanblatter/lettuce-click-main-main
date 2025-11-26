@@ -108,18 +108,27 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     setAccentSelection(premiumAccentColor);
   }, [premiumAccentColor]);
 
+  // Register custom emojis that aren't in the catalog yet
+  useEffect(() => {
+    CLICK_EMOJI_CHOICES.forEach((glyph) => {
+      const catalogEntry = emojiCatalog.find((entry) => entry.emoji === glyph);
+      if (!catalogEntry) {
+        registerCustomEmoji(glyph);
+      }
+    });
+  }, [emojiCatalog, registerCustomEmoji]);
+
   const emojiOptions = useMemo(() => {
     const options: { id: string; emoji: string }[] = [];
     CLICK_EMOJI_CHOICES.forEach((glyph) => {
-      const catalogEntry =
-        emojiCatalog.find((entry) => entry.emoji === glyph) ?? registerCustomEmoji(glyph) ?? null;
+      const catalogEntry = emojiCatalog.find((entry) => entry.emoji === glyph);
 
       if (catalogEntry && !options.some((option) => option.id === catalogEntry.id)) {
         options.push(catalogEntry);
       }
     });
     return options;
-  }, [CLICK_EMOJI_CHOICES, emojiCatalog]);
+  }, [emojiCatalog]);
   const backgroundWheelPositions = useMemo(
     () =>
       BACKGROUND_WHEEL_COLORS.map((color, index) => {

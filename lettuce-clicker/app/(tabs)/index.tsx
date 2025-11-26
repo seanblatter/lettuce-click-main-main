@@ -174,8 +174,6 @@ export default function HomeScreen() {
     addHarvestAmount,
     spendHarvestAmount,
     grantEmojiUnlock,
-    isExpandedView,
-    setIsExpandedView,
     bedsideWidgetsEnabled,
     hasPremiumUpgrade,
     weatherData,
@@ -679,9 +677,6 @@ export default function HomeScreen() {
   }, []);
 
   const handleOpenMusic = useCallback(() => {
-    // Prevent navigation when in expanded view
-    if (isExpandedView) return;
-    
     setMenuOpen(false);
     const isLandscape = dimensions.width > dimensions.height;
     
@@ -692,7 +687,7 @@ export default function HomeScreen() {
       // Use modal in portrait mode
       setShowMusicQuickAction(true);
     }
-  }, [dimensions, isExpandedView]);
+  }, [dimensions]);
 
   const handleCloseMusicQuickAction = useCallback(() => {
     setShowMusicQuickAction(false);
@@ -715,20 +710,11 @@ export default function HomeScreen() {
   );
 
   const handleOpenDreamCapsule = useCallback(() => {
-    if (isExpandedView) return;
     setMenuOpen(false);
     router.push('/music?openDreamCapsule=true');
-  }, [isExpandedView]);
+  }, []);
 
-  const handleToggleExpandedView = useCallback(() => {
-    setIsExpandedView(!isExpandedView);
-  }, [isExpandedView]);
 
-  const handleCloseExpandedView = useCallback(() => {
-    if (isExpandedView) {
-      setIsExpandedView(false);
-    }
-  }, [isExpandedView]);
 
   const handleWeatherPress = useCallback(async () => {
     if (weatherData) {
@@ -760,19 +746,6 @@ export default function HomeScreen() {
       }
     }
   }, [weatherData, temperatureUnit, setTemperatureUnit, hasManuallySetTemperatureUnit]);
-
-  // Close temperature settings when expanded view closes
-  useEffect(() => {
-    if (!isExpandedView) {
-      setShowTemperatureSettings(false);
-    }
-  }, [isExpandedView]);
-
-  useEffect(() => {
-    if (dimensions.width <= dimensions.height && isExpandedView) {
-      setIsExpandedView(false);
-    }
-  }, [dimensions.height, dimensions.width, isExpandedView, setIsExpandedView]);
 
   const handleSelectTheme = useCallback(
     (theme: HomeEmojiTheme) => {
@@ -1078,456 +1051,13 @@ export default function HomeScreen() {
           { backgroundColor: gardenSurfaceColor },
 
         ]}>
-          {isExpandedView ? (
-            /* EXPANDED VIEW - Only clicker and harvest ledger/dream capsule */
-            <Pressable
-              style={[
-                styles.expandedFullView,
-                {
-                  paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24,
-                  paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24,
-                  paddingTop: Math.max(insets.top + 20, 40),
-                  paddingBottom: Math.max(insets.bottom + 20, 40),
-                }
-              ]}
-              onPress={handleCloseExpandedView}
-            >
-              {/* Emoji Theme Animations for Expanded View */}
-              {!isAmbientPlaying && orbitingUpgradeEmojis.length > 0 && (
-                <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
-              )}
-              {/* Bedside Widgets - Corner Overlays */}
-              {bedsideWidgetsEnabled && (
-                <>
-                  {/* Top Left - Alarm */}
-                  <Pressable
-                    style={styles.bedsideWidgetTopLeft}
-                    onPress={() => Alert.alert('Alarm', 'Alarm functionality coming soon!')}
-                    accessibilityLabel="Set alarm"
-                  >
-                    <Text style={styles.bedsideWidgetIcon}>⏰</Text>
-                  </Pressable>
-
-                  {/* Top Right - Weather */}
-                  <Pressable
-                    style={styles.bedsideWidgetTopRight}
-                    onPress={handleWeatherPress}
-                    accessibilityLabel={weatherData ? `Weather: ${displayTemperature}°${temperatureUnit === 'fahrenheit' ? 'F' : 'C'}, ${weatherData.condition}` : 'Get weather'}
-                  >
-                    {weatherData ? (
-                      <View style={{ alignItems: 'center' }} key={`${temperatureUnit}-${displayTemperature}`}>
-                        <Text style={styles.bedsideWidgetBatteryText}>
-                          Now: {displayTemperature}°{temperatureUnit === 'fahrenheit' ? 'F' : 'C'}
-                        </Text>
-                      </View>
-                    ) : weatherError ? (
-                      <View style={{ alignItems: 'center' }}>
-                        <Text style={styles.bedsideWidgetIcon}>❌</Text>
-                        <Text style={styles.bedsideWidgetBatteryText}>
-                          Error
-                        </Text>
-                      </View>
-                    ) : (
-                      <View style={{ alignItems: 'center' }}>
-                        <Text style={styles.bedsideWidgetIcon}>🌤️</Text>
-                        <Text style={styles.bedsideWidgetBatteryText}>
-                          Tap
-                        </Text>
-                      </View>
-                    )}
-                  </Pressable>
-
-                  {/* Bottom Left - Date */}
-                  <View style={styles.bedsideWidgetBottomLeft}>
-                    <Text style={styles.bedsideWidgetDateText}>
-                      {new Date().toLocaleDateString('en-US', { 
-                        weekday: 'short', 
-                        month: 'short', 
-                        day: 'numeric' 
-                      })}
-                    </Text>
-                  </View>
-
-                  {/* Bottom Right - Battery */}
-                  <View style={styles.bedsideWidgetBottomRight}>
-                    <Text style={styles.bedsideWidgetBatteryText}>Battery: 85%</Text>
-                  </View>
-                </>
-              )}
-
-
-
-              {/* Temperature Settings Container - Center of Expanded View */}
-              {bedsideWidgetsEnabled && showTemperatureSettings && (
-                <View style={styles.temperatureSettingsContainer}>
-                  <View style={styles.temperatureSettingsHeader}>
-                    <Text style={styles.temperatureSettingsTitle}>Temperature</Text>
-                    <Pressable 
-                      style={styles.temperatureSettingsClose}
-                      onPress={() => setShowTemperatureSettings(false)}
-                    >
-                      <Text style={styles.temperatureSettingsCloseText}>✕</Text>
-                    </Pressable>
-                  </View>
-                  <View style={styles.temperatureUnitButtons}>
-                    <Pressable
-                      style={[
-                        styles.temperatureUnitButton,
-                        temperatureUnit === 'celsius' && styles.temperatureUnitButtonActive
-                      ]}
-                      onPress={() => {
-                        setTemperatureUnit('celsius');
-                        setHasManuallySetTemperatureUnit(true);
-                        setShowTemperatureSettings(false); // Close settings
-                      }}
-                    >
-                      <Text style={[
-                        styles.temperatureUnitButtonText,
-                        temperatureUnit === 'celsius' && styles.temperatureUnitButtonTextActive
-                      ]}>
-                        °C
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      style={[
-                        styles.temperatureUnitButton,
-                        temperatureUnit === 'fahrenheit' && styles.temperatureUnitButtonActive
-                      ]}
-                      onPress={() => {
-                        setTemperatureUnit('fahrenheit');
-                        setHasManuallySetTemperatureUnit(true);
-                        setShowTemperatureSettings(false); // Close settings
-                      }}
-                    >
-                      <Text style={[
-                        styles.temperatureUnitButtonText,
-                        temperatureUnit === 'fahrenheit' && styles.temperatureUnitButtonTextActive
-                      ]}>
-                        °F
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-              )}
-
-              <View style={[
-                styles.lettuceWrapper, 
-                isLandscape && styles.lettuceWrapperLandscape,
-                styles.lettuceWrapperExpandedAligned
-              ]}>
-                {isAmbientPlaying ? (
-                  <View style={styles.audioPulseContainer} pointerEvents="none">
-                    <Animated.View
-                      style={[
-                        styles.audioPulseRing,
-                        {
-                          borderColor: accentSurface,
-                          transform: [{ scale: audioPrimaryScale }],
-                          opacity: audioPrimaryOpacity,
-                        },
-                      ]}
-                    />
-                    <Animated.View
-                      style={[
-                        styles.audioPulseRingSecondary,
-                        {
-                          borderColor: accentHighlight,
-                          transform: [{ scale: audioSecondaryScale }],
-                          opacity: audioSecondaryOpacity,
-                        },
-                      ]}
-                    />
-                    <Animated.View
-                      style={[
-                        styles.audioPulseCore,
-                        {
-                          backgroundColor: accentSurface,
-                          shadowColor: accentColor,
-                          transform: [{ scale: audioCoreScale }],
-                        },
-                      ]}
-                    />
-                  </View>
-                ) : (
-                  <View style={styles.lettuceBackdrop}>
-                    <View style={[styles.backdropHalo, styles.backdropHaloOuter]} />
-                    <View style={[styles.backdropHalo, styles.backdropHaloMiddle]} />
-                    <View style={[styles.backdropHalo, styles.backdropHaloInner]} />
-                    <View style={[styles.backdropBubble, styles.backdropBubbleOne]} />
-                    <View style={[styles.backdropBubble, styles.backdropBubbleTwo]} />
-                    <View style={[styles.backdropBubble, styles.backdropBubbleThree]} />
-                  </View>
-                )}
-                <GestureDetector gesture={djGesture}>
-                  <Pressable
-                    accessibilityLabel="Harvest lettuce"
-                    onPress={addHarvest}
-                    style={({ pressed }) => [
-                      styles.lettuceButton,
-                      pressed && styles.lettucePressed,
-                    ]}
-                  >
-                    <View style={[styles.lettuceButtonBase, { backgroundColor: accentColor }]} />
-                    <View
-                      style={[
-                        styles.lettuceButtonFace,
-                        {
-                          backgroundColor: accentSurface,
-                          borderColor: accentColor,
-                          shadowColor: accentColor,
-                        },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.lettuceButtonHighlight,
-                          { backgroundColor: accentHighlight },
-                        ]}
-                      />
-                      <Reanimated.Text 
-                        style={[
-                          styles.lettuceEmoji, 
-                          isAmbientPlaying && djWheelStyle
-                        ]}
-                      >
-                        {customClickEmoji}
-                      </Reanimated.Text>
-                    </View>
-                  </Pressable>
-                </GestureDetector>
-                {isAmbientPlaying && (
-                  <Reanimated.View 
-                    key={`volume-indicator-${displayVolume.toFixed(3)}`}
-                    style={[
-                      styles.volumeIndicator,
-                      isLandscape && styles.volumeIndicatorLandscape
-                    ]}
-                  >
-                    <View style={[
-                      styles.volumeTrack,
-                      isLandscape && styles.volumeTrackLandscape
-                    ]}>
-                      <Reanimated.View 
-                        style={[
-                          styles.volumeFill, 
-                          volumeFillStyle,
-                          { 
-                            backgroundColor: accentColor,
-                          }
-                        ]} 
-                      />
-                    </View>
-                    <VolumeText 
-                      key={`volume-text-${displayVolume.toFixed(3)}`}
-                      style={[
-                        styles.volumeLabel, 
-                        isLandscape && styles.volumeLabelLandscape
-                      ]}
-                      color={accentColor}
-                    />
-                  </Reanimated.View>
-                )}
-              </View>
-
-              <View style={[styles.statsSection, isLandscape && styles.statsSectionLandscape]}>
-                <GestureDetector gesture={ledgerSwipeGesture}>
-                  <Reanimated.View style={containerAnimatedStyle}>
-                    {!showMusicContainer ? (
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.statsCard,
-                          { shadowColor: ledgerTheme.shadowColor },
-                          pressed && styles.statsCardPressed,
-                          isLandscape && styles.statsCardLandscape,
-                        ]}
-                        onPress={handleLedgerPress}
-                        accessibilityRole="button"
-                        accessibilityLabel="Harvest Ledger"
-                        accessibilityHint="Tap to cycle the ledger background color"
-                      >
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardBackdrop, { backgroundColor: ledgerTheme.backgroundColor }]}
-                        />
-                        
-                        <View
-                          pointerEvents="none"
-                          style={[
-                            styles.statsCardGrain,
-                            {
-                              backgroundColor: ledgerTheme.grainColor,
-                              opacity: ledgerTheme.grainOpacity,
-                            },
-                          ]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardFrost, { backgroundColor: ledgerTheme.refraction }]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardSheen, { backgroundColor: ledgerTheme.highlight }]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardInnerBorder, { borderColor: ledgerTheme.innerBorder }]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
-                        />
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>Harvest Ledger</Text>
-                        </View>
-                        <View style={styles.statRow}>
-                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Emojis collected</Text>
-                          <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
-                            {emojiCollectionCount.toLocaleString()}
-                          </Text>
-                        </View>
-                        {!isExpandedView && (
-                          <View style={styles.statRow}>
-                            <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Auto clicks /s</Text>
-                            <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
-                              {autoPerSecond.toLocaleString()}
-                            </Text>
-                          </View>
-                        )}
-                        <View style={styles.statRow}>
-                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Available harvest</Text>
-                          <Text style={[
-                            styles.statValue, 
-                            { 
-                              color: ledgerTheme.tint,
-                              fontSize: getDynamicFontSize(harvest)
-                            }
-                          ]}>
-                            {formatLifetimeHarvest(harvest)}
-                          </Text>
-                        </View>
-                        <View style={styles.statRow}>
-                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Lifetime harvest</Text>
-                          <Text style={[
-                            styles.statValue, 
-                            { 
-                              color: ledgerTheme.tint,
-                              fontSize: getDynamicFontSize(lifetimeHarvest)
-                            }
-                          ]}>
-                            {formatLifetimeHarvest()}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    ) : (
-                      <Pressable
-                        style={({ pressed }) => [
-                          styles.statsCard,
-                          { shadowColor: ledgerTheme.shadowColor },
-                          pressed && styles.statsCardPressed,
-                          isLandscape && styles.statsCardLandscape,
-                        ]}
-                        onPress={() => setShowMusicContainer(false)}
-                        accessibilityRole="button"
-                        accessibilityLabel="Music Container"
-                        accessibilityHint="Tap to return to harvest ledger or swipe to navigate"
-                      >
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardBackdrop, { backgroundColor: ledgerTheme.backgroundColor }]}
-                        />
-                        
-                        <View
-                          pointerEvents="none"
-                          style={[
-                            styles.statsCardGrain,
-                            {
-                              backgroundColor: ledgerTheme.grainColor,
-                              opacity: ledgerTheme.grainOpacity,
-                            },
-                          ]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardFrost, { backgroundColor: ledgerTheme.refraction }]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardSheen, { backgroundColor: ledgerTheme.highlight }]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardInnerBorder, { backgroundColor: ledgerTheme.innerBorder }]}
-                        />
-                        <View
-                          pointerEvents="none"
-                          style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
-                        />
-                        <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
-                        {isAmbientPlaying ? (
-                          <Text style={[styles.dreamCapsuleHint, { color: ledgerTheme.muted }]}>Use device volume buttons to adjust.</Text>
-                        ) : null}
-                        <View style={styles.statRow}>
-                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Now Playing</Text>
-                          <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
-                            {isAmbientPlaying ? 'Forest Dawn' : 'Paused'}
-                          </Text>
-                        </View>
-                        <View style={styles.statRow}>
-                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Volume</Text>
-                          <VolumeText 
-                            style={[styles.statValue]}
-                            color={ledgerTheme.tint}
-                          />
-                        </View>
-                        <Pressable 
-                          style={({ pressed }) => [
-                            styles.statRow, 
-                            pressed && { opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.1)' }
-                          ]}
-                          onPress={togglePlayback}
-                          accessibilityRole="button"
-                          accessibilityLabel={isAmbientPlaying ? "Pause music" : "Play music"}
-                        >
-                          <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Status</Text>
-                          <Text style={[styles.statValue, { color: ledgerTheme.tint, fontWeight: '600' }]}>
-                            {isAmbientPlaying ? '▶️ Playing' : '⏸️ Tap to Play'}
-                          </Text>
-                        </Pressable>
-                      </Pressable>
-                    )}
-                  </Reanimated.View>
-                </GestureDetector>
-              </View>
-
-              {/* RSS Feed Widget - Below all bedside widgets (date, battery, alarm, weather) */}
-              {(() => {
-                // Only show RSSWidget if user does NOT have premium
-                const shouldShowRss = !hasPremiumUpgrade && bedsideWidgetsEnabled && rssFeeds.some(feed => feed.enabled);
-                return shouldShowRss;
-              })() && (
-                <View style={styles.rssWidgetContainer}>
-                  <RSSWidget height={60} />
-                </View>
-              )}
-            </Pressable>
-          ) : (
-            /* NORMAL VIEW - Everything visible */
-            <>
-            {/* Header always visible */}
-            <View style={[
+          {/* Header always visible */}
+          <View style={[
             styles.headerWrapper, 
             { 
               paddingTop: headerPaddingTop,
-              paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24, // Add safe area padding in landscape
-              paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24, // Add safe area padding in landscape
+              paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24,
+              paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24,
             },
             isLandscape && styles.headerWrapperLandscape
           ]}>
@@ -1581,9 +1111,11 @@ export default function HomeScreen() {
               justifyContent: isLandscape ? 'space-between' : 'space-between',
             }
           ]}
-          onPress={isExpandedView ? handleCloseExpandedView : undefined}
         >
           <View style={[styles.lettuceWrapper, isLandscape && styles.lettuceWrapperLandscape]}>
+            {!isAmbientPlaying ? (
+              <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
+            ) : null}
             {isAmbientPlaying ? (
               <View style={styles.audioPulseContainer} pointerEvents="none">
                 <Animated.View
@@ -1627,9 +1159,6 @@ export default function HomeScreen() {
                 <View style={[styles.backdropBubble, styles.backdropBubbleThree]} />
               </View>
             )}
-            {!isAmbientPlaying ? (
-              <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
-            ) : null}
             <GestureDetector gesture={djGesture}>
               <Pressable
                 accessibilityLabel="Harvest lettuce"
@@ -1723,33 +1252,7 @@ export default function HomeScreen() {
                   />
                   <View
                     pointerEvents="none"
-                    style={[
-                      styles.statsCardGrain,
-                      {
-                        backgroundColor: ledgerTheme.grainColor,
-                        opacity: ledgerTheme.grainOpacity,
-                      },
-                    ]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.statsCardFrost, { backgroundColor: ledgerTheme.refraction }]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.statsCardSheen, { backgroundColor: ledgerTheme.highlight }]}
-                  />
-                  <View
-                    pointerEvents="none"
                     style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.statsCardInnerBorder, { backgroundColor: ledgerTheme.innerBorder }]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.statsCardStitch, { borderColor: ledgerTheme.stitchColor }]}
                   />
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>Harvest Ledger</Text>
@@ -1810,21 +1313,7 @@ export default function HomeScreen() {
                   />
                   <View
                     pointerEvents="none"
-                    style={[
-                      styles.statsCardGrain,
-                      {
-                        backgroundColor: ledgerTheme.grainColor,
-                        opacity: ledgerTheme.grainOpacity,
-                      },
-                    ]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    style={[styles.statsCardFrost, { backgroundColor: ledgerTheme.refraction }]}
-                  />
-                  <View
-                    pointerEvents="none"
-                    /* ...existing props... */
+                    style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
                   />
                   <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
                   {isAmbientPlaying ? (
@@ -1865,8 +1354,8 @@ export default function HomeScreen() {
           </GestureDetector>
         </View>
         </Pressable>
-        </>
-        )}
+      </View>
+    </SafeAreaView>
 
         <Modal
           visible={menuOpen}
@@ -2389,12 +1878,6 @@ export default function HomeScreen() {
         onSelectUnit={setTemperatureUnit}
         sampleTemperature={weatherData?.temperature || 22}
       />
-
-      {/* Expose selected artwork URI for widget use */}
-      {/* const selectedWidgetPromenadeEntry = widgetPromenadeSorted.find(e => e.id === selectedWidgetPromenadeId) || null; */}
-      {/* You can now use selectedWidgetPromenadeEntry?.uri for the Android widget */}
-      </View>
-      </SafeAreaView>
     </>
   );
 }
@@ -2926,7 +2409,8 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     textAlign: 'right', // Right-align the value
-    flexShrink: 0, // Prevent value from shrinking
+    flexShrink: 1, // Allow value to shrink if needed
+    maxWidth: '60%', // Prevent value from taking more than 60% of width
   },
   modalOverlay: {
     flex: 1,

@@ -20,6 +20,8 @@ export default function UpgradesScreen() {
     emojiCatalog,
     emojiInventory,
     gardenBackgroundColor,
+    hasPremiumUpgrade,
+    setCustomEmojiName,
   } = useGame();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -52,6 +54,8 @@ export default function UpgradesScreen() {
           setHomeEmojiTheme={setHomeEmojiTheme}
           emojiCatalog={emojiCatalog}
           emojiInventory={emojiInventory}
+          hasPremiumUpgrade={hasPremiumUpgrade}
+          setCustomEmojiName={setCustomEmojiName}
         />
       </ScrollView>
     </SafeAreaView>

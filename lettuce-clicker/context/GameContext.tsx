@@ -157,6 +157,8 @@ type GameContextValue = {
   rssError: string | null;
   rssLastUpdated: number;
   widgetPromenade: WidgetPromenadeEntry[];
+  customEmojiNames: Record<string, string>;
+  setCustomEmojiName: (emojiId: string, customName: string) => void;
   registerCustomEmoji: (
     emoji: string,
     options?: { name?: string; costOverride?: number; imageUrl?: string; tags?: string[] }
@@ -585,6 +587,7 @@ type StoredGameState = {
   placements: Placement[];
   orbitingUpgradeEmojis: OrbitingEmoji[];
   customEmojiCatalog?: Record<string, EmojiDefinition>;
+  customEmojiNames?: Record<string, string>;
   hasPremiumUpgrade?: boolean;
   premiumAccentColor?: string;
   customClickEmoji?: string;
@@ -618,6 +621,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   }));
   const [resumeNotice, setResumeNotice] = useState<PassiveResumeNotice | null>(null);
   const [customEmojiCatalog, setCustomEmojiCatalog] = useState<Record<string, EmojiDefinition>>({});
+  const [customEmojiNames, setCustomEmojiNames] = useState<Record<string, string>>({});
   const [hasPremiumUpgrade, setHasPremiumUpgrade] = useState(false);
   const [premiumAccentColor, setPremiumAccentColorState] = useState('#1f6f4a');
   const [customClickEmoji, setCustomClickEmojiState] = useState('🥬');
@@ -803,8 +807,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   );
 
   const combinedEmojiCatalog = useMemo(
-    () => [...gardenEmojiCatalog, ...Object.values(customEmojiCatalog)],
-    [customEmojiCatalog]
+    () => [...gardenEmojiCatalog, ...Object.values(customEmojiCatalog)].map(emoji => ({
+      ...emoji,
+      name: customEmojiNames[emoji.id] || emoji.name,
+    })),
+    [customEmojiCatalog, customEmojiNames]
   );
 
   const findEmojiDefinition = useCallback(
@@ -1105,6 +1112,17 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     return unlocked;
   }, []);
 
+  const setCustomEmojiName = useCallback((emojiId: string, customName: string) => {
+    if (!hasPremiumUpgrade) {
+      return;
+    }
+
+    setCustomEmojiNames((prev) => ({
+      ...prev,
+      [emojiId]: customName,
+    }));
+  }, [hasPremiumUpgrade]);
+
   const placeEmoji = useCallback(
     (emojiId: string, position: { x: number; y: number }) => {
       if (!emojiInventory[emojiId]) {
@@ -1235,6 +1253,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setOwnedThemes({ ...defaultOwnedThemes });
     setResumeNotice(null);
     setCustomEmojiCatalog({});
+    setCustomEmojiNames({});
     setHasPremiumUpgrade(false);
     setPremiumAccentColorState('#1f6f4a');
     setCustomClickEmojiState('🥬');
@@ -1350,6 +1369,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     rssError,
     rssLastUpdated,
     widgetPromenade,
+    customEmojiNames,
+    setCustomEmojiName,
     registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,
@@ -1501,6 +1522,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     widgetPromenade,
     addWidgetPromenadePhoto,
     removeWidgetPromenadePhoto,
+    customEmojiNames,
+    setCustomEmojiName,
   ]);
 
   useEffect(() => {
@@ -1620,6 +1643,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
               setCustomEmojiCatalog(parsed.customEmojiCatalog);
             } else if (shouldResetSession) {
               setCustomEmojiCatalog({});
+            }
+            if (!shouldResetSession && parsed.customEmojiNames && typeof parsed.customEmojiNames === 'object') {
+              setCustomEmojiNames(parsed.customEmojiNames);
+            } else if (shouldResetSession) {
+              setCustomEmojiNames({});
             }
             if (typeof parsed.hasPremiumUpgrade === 'boolean') {
               setHasPremiumUpgrade(parsed.hasPremiumUpgrade);
@@ -1759,6 +1787,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       placements,
       orbitingUpgradeEmojis,
       customEmojiCatalog,
+      customEmojiNames,
       hasPremiumUpgrade,
       premiumAccentColor,
       customClickEmoji,
@@ -1777,6 +1806,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     bedsideWidgetsEnabled,
     customClickEmoji,
     customEmojiCatalog,
+    customEmojiNames,
     emojiInventory,
     harvest,
     hasPremiumUpgrade,
