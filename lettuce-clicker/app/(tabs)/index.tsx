@@ -31,6 +31,7 @@ import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
 import { formatTemperature, getDisplayTemperature, detectTemperatureUnitFromLocation } from '@/lib/weatherUtils';
 import { TemperatureUnitModal } from '@/components/TemperatureUnitModal';
 import { RSSWidget } from '@/components/RSSWidget';
+import { GamesHub } from '@/components/GamesHub';
 import { Platform, NativeModules } from 'react-native';
 
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
@@ -167,6 +168,7 @@ export default function HomeScreen() {
     emojiInventory,
     ownedThemes,
     profileName,
+    customEmojiNames,
     resumeNotice,
     clearResumeNotice,
     customClickEmoji,
@@ -214,6 +216,7 @@ export default function HomeScreen() {
   const [showProfileQuickAction, setShowProfileQuickAction] = useState(false);
   const [showMusicQuickAction, setShowMusicQuickAction] = useState(false);
   const [showWidgetPromenade, setShowWidgetPromenade] = useState(false);
+  const [showGamesHub, setShowGamesHub] = useState(false);
   // Add state for selected widget promenade entry
   const [selectedWidgetPromenadeId, setSelectedWidgetPromenadeId] = useState<string | null>(null);
 
@@ -267,6 +270,7 @@ export default function HomeScreen() {
     bonus: new Animated.Value(0),
     themes: new Animated.Value(0),
     widgets: new Animated.Value(0),
+    games: new Animated.Value(0),
   }).current;
   
   // Hardware volume button synchronization
@@ -458,6 +462,7 @@ export default function HomeScreen() {
       bonus: quickActionWiggles.bonus.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
       themes: quickActionWiggles.themes.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
       widgets: quickActionWiggles.widgets.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
+      games: quickActionWiggles.games.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
     }),
     [quickActionWiggles]
   );
@@ -701,6 +706,15 @@ export default function HomeScreen() {
 
   const handleCloseWidgetPromenade = useCallback(() => {
     setShowWidgetPromenade(false);
+  }, []);
+
+  const handleOpenGamesHub = useCallback(() => {
+    setMenuOpen(false);
+    setShowGamesHub(true);
+  }, []);
+
+  const handleCloseGamesHub = useCallback(() => {
+    setShowGamesHub(false);
   }, []);
 
   const handleRemovePromenadePhoto = useCallback(
@@ -1525,6 +1539,43 @@ export default function HomeScreen() {
                         styles.quickActionCard,
                         pressed && styles.menuItemCardPressed,
                       ]}
+                      onPress={handleOpenGamesHub}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open Games Hub"
+                    >
+                      <Pressable
+                        style={styles.quickActionIconPressable}
+                        onPress={handleQuickActionEmojiPress('games')}
+                        accessibilityRole="button"
+                        accessibilityLabel="Animate games emoji"
+                        hitSlop={8}
+                      >
+                        <Animated.View
+                          style={[
+                            styles.menuItemIconWrap,
+                            styles.quickActionIconWrap,
+                            { transform: [{ rotate: quickActionRotations.games }] },
+                          ]}
+                        >
+                          <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>🎮</Text>
+                        </Animated.View>
+                      </Pressable>
+                      <View style={styles.menuItemBody}>
+                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Games Arcade</Text>
+                        <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
+                          Play with your emoji collection
+                        </Text>
+                      </View>
+                      <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
+                        <Text style={[styles.menuItemChevron, styles.quickActionChevron]}>›</Text>
+                      </View>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.menuItemCard,
+                        styles.quickActionCard,
+                        pressed && styles.menuItemCardPressed,
+                      ]}
                       onPress={() => setMenuPage('themes')}
                       accessibilityRole="button"
                     >
@@ -1873,6 +1924,14 @@ export default function HomeScreen() {
           </View>
         </SafeAreaView>
       </Modal>
+
+      <GamesHub
+        visible={showGamesHub}
+        onRequestClose={handleCloseGamesHub}
+        emojiInventory={emojiInventory}
+        emojiCatalog={gardenEmojiCatalog}
+        customEmojiNames={customEmojiNames}
+      />
 
       <TemperatureUnitModal
         visible={showTemperatureUnitModal}
