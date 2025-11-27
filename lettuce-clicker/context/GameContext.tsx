@@ -158,8 +158,12 @@ type GameContextValue = {
   rssError: string | null;
   rssLastUpdated: number;
   widgetPromenade: WidgetPromenadeEntry[];
+  emojiGameStats: Record<string, EmojiGameStats>;
   customEmojiNames: Record<string, string>;
   setCustomEmojiName: (emojiId: string, customName: string) => void;
+  updateFlappyEmojiStats: (emojiId: string, score: number, isGameEnd: boolean) => void;
+  updateSlicerEmojiStats: (emojiId: string) => void;
+  updateSlicerGameStats: (emojiIds: string[]) => void;
   registerCustomEmoji: (
     emoji: string,
     options?: { name?: string; costOverride?: number; imageUrl?: string; tags?: string[] }
@@ -580,6 +584,14 @@ const normalizePlacement = (entry: unknown): Placement | null => {
   };
 };
 
+export type EmojiGameStats = {
+  flappyBestScore?: number;
+  flappyTotalScore?: number;
+  flappyGamesPlayed?: number;
+  slicerTimesSliced?: number;
+  slicerGamesPlayed?: number;
+};
+
 type StoredGameState = {
   harvest: number;
   lifetimeHarvest: number;
@@ -598,6 +610,7 @@ type StoredGameState = {
   hasManuallySetTemperatureUnit?: boolean;
   rssFeeds?: RSSFeed[];
   widgetPromenade?: WidgetPromenadeEntry[];
+  emojiGameStats?: Record<string, EmojiGameStats>;
 };
 
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -640,6 +653,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [rssError, setRssError] = useState<string | null>(null);
   const [rssLastUpdated, setRssLastUpdated] = useState(0);
   const [widgetPromenade, setWidgetPromenade] = useState<WidgetPromenadeEntry[]>([]);
+  const [emojiGameStats, setEmojiGameStats] = useState<Record<string, EmojiGameStats>>({});
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundInfoRef = useRef<
@@ -1150,6 +1164,51 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     }));
   }, [hasPremiumUpgrade]);
 
+  const updateFlappyEmojiStats = useCallback((emojiId: string, score: number, isGameEnd: boolean) => {
+    setEmojiGameStats((prev) => {
+      const current = prev[emojiId] || {};
+      const newBestScore = Math.max(current.flappyBestScore || 0, score);
+      
+      return {
+        ...prev,
+        [emojiId]: {
+          ...current,
+          flappyBestScore: newBestScore,
+          flappyTotalScore: (current.flappyTotalScore || 0) + score,
+          flappyGamesPlayed: isGameEnd ? (current.flappyGamesPlayed || 0) + 1 : current.flappyGamesPlayed,
+        },
+      };
+    });
+  }, []);
+
+  const updateSlicerEmojiStats = useCallback((emojiId: string) => {
+    setEmojiGameStats((prev) => {
+      const current = prev[emojiId] || {};
+      
+      return {
+        ...prev,
+        [emojiId]: {
+          ...current,
+          slicerTimesSliced: (current.slicerTimesSliced || 0) + 1,
+        },
+      };
+    });
+  }, []);
+
+  const updateSlicerGameStats = useCallback((emojiIds: string[]) => {
+    setEmojiGameStats((prev) => {
+      const updated = { ...prev };
+      emojiIds.forEach(emojiId => {
+        const current = updated[emojiId] || {};
+        updated[emojiId] = {
+          ...current,
+          slicerGamesPlayed: (current.slicerGamesPlayed || 0) + 1,
+        };
+      });
+      return updated;
+    });
+  }, []);
+
   const placeEmoji = useCallback(
     (emojiId: string, position: { x: number; y: number }) => {
       if (!emojiInventory[emojiId]) {
@@ -1397,8 +1456,12 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     rssError,
     rssLastUpdated,
     widgetPromenade,
+    emojiGameStats,
     customEmojiNames,
     setCustomEmojiName,
+    updateFlappyEmojiStats,
+    updateSlicerEmojiStats,
+    updateSlicerGameStats,
     registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,
@@ -1549,10 +1612,14 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     rssError,
     rssLastUpdated,
     widgetPromenade,
+    emojiGameStats,
     addWidgetPromenadePhoto,
     removeWidgetPromenadePhoto,
     customEmojiNames,
     setCustomEmojiName,
+    updateFlappyEmojiStats,
+    updateSlicerEmojiStats,
+    updateSlicerGameStats,
   ]);
 
   useEffect(() => {
@@ -1737,6 +1804,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             } else if (shouldResetSession) {
               setWidgetPromenade([]);
             }
+            if (!shouldResetSession && parsed.emojiGameStats && typeof parsed.emojiGameStats === 'object') {
+              setEmojiGameStats(parsed.emojiGameStats);
+            } else if (shouldResetSession) {
+              setEmojiGameStats({});
+            }
           } catch {
             // ignore malformed stored data
           }
@@ -1827,6 +1899,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       hasManuallySetTemperatureUnit,
       rssFeeds,
       widgetPromenade,
+      emojiGameStats,
     };
 
     AsyncStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(payload)).catch(() => {
@@ -1851,6 +1924,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     rssFeeds,
     rssItems,
     widgetPromenade,
+    emojiGameStats,
   ]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

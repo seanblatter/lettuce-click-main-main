@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useGame } from '@/context/GameContext';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const GAME_HEIGHT = SCREEN_HEIGHT - 200;
@@ -51,9 +52,11 @@ interface Entity {
 interface LettuceSlicerGameProps {
   onBack: () => void;
   ownedEmojis: Array<{ emoji: string; imageUrl?: string; name?: string }>;
+  emojiStringToId: Record<string, string>;
 }
 
-export default function LettuceSlicerGame({ onBack, ownedEmojis }: LettuceSlicerGameProps) {
+export default function LettuceSlicerGame({ onBack, ownedEmojis, emojiStringToId }: LettuceSlicerGameProps) {
+  const { updateSlicerEmojiStats, updateSlicerGameStats } = useGame();
   const [started, setStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
@@ -79,6 +82,7 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis }: LettuceSlicer
   const gameAreaLayout = useRef({ x: 0, y: 0, width: 0, height: 0 });
   const lastTouchPos = useRef({ x: 0, y: 0 });
   const comboTimeoutRef = useRef<any>(null);
+  const slicedEmojisThisGame = useRef(new Set<string>());
   
   // Keep refs in sync
   useEffect(() => {
@@ -150,6 +154,7 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis }: LettuceSlicer
     setCombo(0);
     setSparklePoints([]);
     droppedIds.current = new Set();
+    slicedEmojisThisGame.current = new Set();
     if (comboTimeoutRef.current) clearTimeout(comboTimeoutRef.current);
   };
 
@@ -232,6 +237,14 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis }: LettuceSlicer
       AsyncStorage.setItem('slicer_best', score.toString());
     }
   }, [gameOver, score, best]);
+
+  // Update game stats when game ends
+  useEffect(() => {
+    if (gameOver && slicedEmojisThisGame.current.size > 0) {
+      const emojis = Array.from(slicedEmojisThisGame.current);
+      updateSlicerGameStats(emojis);
+    }
+  }, [gameOver, updateSlicerGameStats]);
 
   // PanResponder for slicing
   const panResponder = useRef(
@@ -324,6 +337,8 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis }: LettuceSlicer
 
   // Check if touch slices any emoji
   const checkSlice = (touchX: number, touchY: number, swipeDx: number = 0, swipeDy: number = 0) => {
+    const slicedEmojis: string[] = [];
+    
     setEntities((prev) => {
       console.log('🔍 Checking slice at', { touchX, touchY }, 'against', prev.length, 'entities');
       
@@ -353,6 +368,11 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis }: LettuceSlicer
               return newLives;
             });
           } else {
+            // Collect sliced emoji for stats tracking - convert to ID
+            const emojiId = emojiStringToId[e.emoji] || e.emoji;
+            slicedEmojis.push(emojiId);
+            slicedEmojisThisGame.current.add(emojiId);
+            
             // Increase combo and calculate points
             setCombo((c) => {
               const newCombo = c + 1;
@@ -380,6 +400,11 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis }: LettuceSlicer
         console.log('🔪 Slice detected!');
       }
       return updated;
+    });
+    
+    // Update stats after state update completes
+    slicedEmojis.forEach(emoji => {
+      updateSlicerEmojiStats(emoji);
     });
   };
 

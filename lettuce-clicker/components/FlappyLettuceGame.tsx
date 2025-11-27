@@ -10,8 +10,10 @@ import {
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useGame } from '@/context/GameContext';
 
 interface EmojiItem {
+  id?: string;
   emoji: string;
   imageUrl?: string;
   name?: string;
@@ -48,6 +50,7 @@ export function FlappyLettuceGame({
   selectedEmoji,
   onEmojiChange,
 }: FlappyLettuceGameProps) {
+  const { updateFlappyEmojiStats } = useGame();
   const [gameState, setGameState] = useState<'select' | 'ready' | 'playing' | 'gameOver'>('select');
   const [score, setScore] = useState(0);
   const [bonusMessage, setBonusMessage] = useState<string | null>(null);
@@ -265,11 +268,18 @@ export function FlappyLettuceGame({
 
   // Update and persist high score
   useEffect(() => {
-    if (gameState === 'gameOver' && score > highScore) {
-      setHighScore(score);
-      AsyncStorage.setItem('flappy_lettuce_high_score', String(score)).catch(() => {});
+    if (gameState === 'gameOver' && score > 0) {
+      // Update emoji-specific stats
+      const emojiId = selectedEmoji.id || selectedEmoji.emoji;
+      updateFlappyEmojiStats(emojiId, score, true);
+      
+      // Update global high score
+      if (score > highScore) {
+        setHighScore(score);
+        AsyncStorage.setItem('flappy_lettuce_high_score', String(score)).catch(() => {});
+      }
     }
-  }, [gameState, score, highScore]);
+  }, [gameState, score, highScore, selectedEmoji, updateFlappyEmojiStats]);
 
   // Background scroll animation
   useEffect(() => {

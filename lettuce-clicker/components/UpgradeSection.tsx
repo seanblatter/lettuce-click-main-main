@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type {
   EmojiDefinition,
+  EmojiGameStats,
   EmojiThemeDefinition,
   HomeEmojiTheme,
   UpgradeDefinition,
@@ -75,6 +76,7 @@ type Props = {
   emojiInventory: Record<string, boolean>;
   hasPremiumUpgrade: boolean;
   setCustomEmojiName: (emojiId: string, newName: string) => void;
+  emojiGameStats: Record<string, EmojiGameStats>;
   title?: string;
 };
 
@@ -93,6 +95,7 @@ export function UpgradeSection({
   emojiInventory,
   hasPremiumUpgrade,
   setCustomEmojiName,
+  emojiGameStats,
   title = 'Conservatory Upgrades',
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -382,6 +385,49 @@ export function UpgradeSection({
                 </View>
                 <View style={styles.emojiStatsDetails}>
                   <Text style={styles.emojiStatsDescription}>{formatEmojiDescription(selectedEmojiDetails)}</Text>
+                  
+                  {/* Game Statistics */}
+                  {(() => {
+                    const emojiId = selectedEmojiDetails.id;
+                    const emojiString = selectedEmojiDetails.emoji;
+                    // Merge stats from both ID and emoji string (for backwards compatibility)
+                    const statsById = emojiGameStats[emojiId] || {};
+                    const statsByString = emojiGameStats[emojiString] || {};
+                    
+                    // Combine stats, preferring the ID-based stats but summing where both exist
+                    const stats = {
+                      flappyBestScore: Math.max(statsById.flappyBestScore || 0, statsByString.flappyBestScore || 0),
+                      flappyTotalScore: (statsById.flappyTotalScore || 0) + (statsByString.flappyTotalScore || 0),
+                      flappyGamesPlayed: (statsById.flappyGamesPlayed || 0) + (statsByString.flappyGamesPlayed || 0),
+                      slicerTimesSliced: (statsById.slicerTimesSliced || 0) + (statsByString.slicerTimesSliced || 0),
+                      slicerGamesPlayed: (statsById.slicerGamesPlayed || 0) + (statsByString.slicerGamesPlayed || 0),
+                    };
+                    
+                    if (stats.flappyBestScore > 0 || stats.slicerTimesSliced > 0) {
+                      return (
+                        <View style={styles.gameStatsContainer}>
+                          {stats.flappyBestScore > 0 && (
+                            <View style={styles.gameStatRow}>
+                              <Text style={styles.gameStatIcon}>🎮</Text>
+                              <Text style={styles.gameStatText}>
+                                Flappy: Best {stats.flappyBestScore} • {stats.flappyGamesPlayed} {stats.flappyGamesPlayed === 1 ? 'game' : 'games'}
+                              </Text>
+                            </View>
+                          )}
+                          {stats.slicerTimesSliced > 0 && (
+                            <View style={styles.gameStatRow}>
+                              <Text style={styles.gameStatIcon}>🔪</Text>
+                              <Text style={styles.gameStatText}>
+                                Slicer: {stats.slicerTimesSliced} {stats.slicerTimesSliced === 1 ? 'slice' : 'slices'} • {stats.slicerGamesPlayed} {stats.slicerGamesPlayed === 1 ? 'game' : 'games'}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      );
+                    }
+                    return null;
+                  })()}
+                  
                   <View style={styles.emojiStatsTags}>
                     {selectedEmojiDetails.tags.slice(0, 3).map((tag, index) => (
                       <View key={index} style={styles.emojiStatsTag}>
@@ -1350,6 +1396,30 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#bbf7d0',
+  },
+  gameStatsContainer: {
+    backgroundColor: '#faf5ff',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#e9d5ff',
+  },
+  gameStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  gameStatIcon: {
+    fontSize: 16,
+  },
+  gameStatText: {
+    fontSize: 13,
+    color: '#7e22ce',
+    fontWeight: '500',
+    flex: 1,
   },
   emojiModalOverlay: {
     flex: 1,

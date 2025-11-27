@@ -24,6 +24,7 @@ interface GamesHubProps {
 type GameScreen = 'hub' | 'flappy-lettuce' | 'lettuce-slicer' | 'lettuce-dash';
 
 interface EmojiItem {
+  id?: string;
   emoji: string;
   imageUrl?: string;
   name?: string;
@@ -40,6 +41,7 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
       const def = emojiCatalog.find(e => e.id === id);
       if (!def) return null;
       return {
+        id: def.id,
         emoji: def.emoji,
         imageUrl: def.imageUrl,
         name: customEmojiNames[id] || def.name,
@@ -51,15 +53,16 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
       const recentEmojis: EmojiItem[] = emojiCatalog
         .slice(0, 9)
         .map(e => ({
+          id: e.id,
           emoji: e.emoji,
           imageUrl: e.imageUrl,
           name: e.name,
         }));
-      return [{ emoji: '🥬' }, ...recentEmojis];
+      return [{ id: 'lettuce', emoji: '🥬' }, ...recentEmojis];
     }
     
     if (!emojis.find(e => e.emoji === '🥬')) {
-      emojis.unshift({ emoji: '🥬' });
+      emojis.unshift({ id: 'lettuce', emoji: '🥬' });
     }
     
     return emojis;
@@ -78,6 +81,17 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
     });
     return mapping;
   }, [emojiInventory, emojiCatalog, customEmojiNames]);
+
+  // Create a mapping from emoji string to ID for consistent stats tracking
+  const emojiStringToId = useMemo(() => {
+    const mapping: Record<string, string> = {};
+    emojiCatalog.forEach(def => {
+      mapping[def.emoji] = def.id;
+    });
+    // Add lettuce explicitly
+    mapping['🥬'] = 'lettuce';
+    return mapping;
+  }, [emojiCatalog]);
 
   const handleBackToHub = () => {
     setCurrentScreen('hub');
@@ -203,6 +217,7 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
           <LettuceSlicerGame
             onBack={handleBackToHub}
             ownedEmojis={ownedEmojiObjects}
+            emojiStringToId={emojiStringToId}
           />
         ) : (
           <View style={styles.placeholderContainer}>
