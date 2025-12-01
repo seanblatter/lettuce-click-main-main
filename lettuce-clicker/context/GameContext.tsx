@@ -8,7 +8,6 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { weatherService } from '../lib/weatherService';
 import { rssService, type RSSFeed, type RSSFeedItem } from '../lib/rssService';
 
 import { computeBellCurveCost, gardenEmojiCatalog } from '@/constants/emojiCatalog';
@@ -148,9 +147,6 @@ type GameContextValue = {
   gardenBackgroundColor: string;
   isExpandedView: boolean;
   bedsideWidgetsEnabled: boolean;
-  weatherData: { temperature: number; condition: string; emoji: string; location: string } | null;
-  weatherError: string | null;
-  weatherLastUpdated: number;
   temperatureUnit: 'celsius' | 'fahrenheit';
   hasManuallySetTemperatureUnit: boolean;
   rssFeeds: RSSFeed[];
@@ -166,6 +162,7 @@ type GameContextValue = {
   updateFlappyEmojiStats: (emojiId: string, score: number, isGameEnd: boolean) => void;
   updateSlicerEmojiStats: (emojiId: string) => void;
   updateSlicerGameStats: (emojiIds: string[]) => void;
+  updateHopEmojiStats: (emojiId: string, score: number, isGameEnd: boolean) => void;
   registerCustomEmoji: (
     emoji: string,
     options?: { name?: string; costOverride?: number; imageUrl?: string; tags?: string[] }
@@ -201,8 +198,6 @@ type GameContextValue = {
   setGardenBackgroundColor: (color: string) => void;
   setIsExpandedView: (value: boolean) => void;
   setBedsideWidgetsEnabled: (value: boolean) => void;
-  updateWeatherData: () => Promise<void>;
-  clearWeatherData: () => void;
   setTemperatureUnit: (unit: 'celsius' | 'fahrenheit') => void;
   setHasManuallySetTemperatureUnit: (value: boolean) => void;
   updateRSSFeeds: () => Promise<void>;
@@ -592,6 +587,9 @@ export type EmojiGameStats = {
   flappyGamesPlayed?: number;
   slicerTimesSliced?: number;
   slicerGamesPlayed?: number;
+  hopBestScore?: number;
+  hopTotalScore?: number;
+  hopGamesPlayed?: number;
 };
 
 type StoredGameState = {
@@ -646,9 +644,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [gardenBackgroundColor, setGardenBackgroundColorState] = useState('#f2f9f2');
   const [isExpandedView, setIsExpandedView] = useState(false);
   const [bedsideWidgetsEnabled, setBedsideWidgetsEnabled] = useState(true);
-  const [weatherData, setWeatherData] = useState<{ temperature: number; condition: string; emoji: string; location: string } | null>(null);
-  const [weatherError, setWeatherError] = useState<string | null>(null);
-  const [weatherLastUpdated, setWeatherLastUpdated] = useState(0);
   const [temperatureUnit, setTemperatureUnit] = useState<'celsius' | 'fahrenheit'>('celsius');
   const [hasManuallySetTemperatureUnit, setHasManuallySetTemperatureUnit] = useState(false);
   const [rssFeeds, setRssFeeds] = useState<RSSFeed[]>([]);
@@ -1217,6 +1212,23 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     });
   }, []);
 
+  const updateHopEmojiStats = useCallback((emojiId: string, score: number, isGameEnd: boolean) => {
+    setEmojiGameStats((prev) => {
+      const current = prev[emojiId] || {};
+      const newBestScore = Math.max(current.hopBestScore || 0, score);
+      
+      return {
+        ...prev,
+        [emojiId]: {
+          ...current,
+          hopBestScore: newBestScore,
+          hopTotalScore: (current.hopTotalScore || 0) + score,
+          hopGamesPlayed: isGameEnd ? (current.hopGamesPlayed || 0) + 1 : current.hopGamesPlayed,
+        },
+      };
+    });
+  }, []);
+
   const placeEmoji = useCallback(
     (emojiId: string, position: { x: number; y: number }) => {
       if (!emojiInventory[emojiId]) {
@@ -1354,9 +1366,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setGardenBackgroundColorState('#f2f9f2');
     setIsExpandedView(false);
     setBedsideWidgetsEnabled(true);
-    setWeatherData(null);
-    setWeatherError(null);
-    setWeatherLastUpdated(0);
     setTemperatureUnit('celsius');
     setHasManuallySetTemperatureUnit(false);
     setRssFeeds([]);
@@ -1454,9 +1463,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     gardenBackgroundColor,
     isExpandedView,
     bedsideWidgetsEnabled,
-    weatherData,
-    weatherError,
-    weatherLastUpdated,
     temperatureUnit,
     hasManuallySetTemperatureUnit,
     rssFeeds,
@@ -1472,6 +1478,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     updateFlappyEmojiStats,
     updateSlicerEmojiStats,
     updateSlicerGameStats,
+    updateHopEmojiStats,
     registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,
@@ -1499,30 +1506,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setIsExpandedView,
     setBedsideWidgetsEnabled,
     clearResumeNotice: () => setResumeNotice(null),
-    updateWeatherData: async () => {
-      setWeatherError(null);
-      try {
-        const result = await weatherService.getCurrentWeather(true);
-        if ('message' in result) {
-          setWeatherError(result.message);
-          setWeatherData(null);
-        } else {
-          setWeatherData(result);
-          setWeatherError(null);
-          setWeatherLastUpdated(Date.now());
-        }
-      } catch (error) {
-        console.error('Weather update error:', error);
-        setWeatherError('Weather service unavailable');
-        setWeatherData(null);
-      }
-    },
-    clearWeatherData: () => {
-      setWeatherData(null);
-      setWeatherError(null);
-      setWeatherLastUpdated(0);
-      weatherService.clearCache();
-    },
     setTemperatureUnit,
     setHasManuallySetTemperatureUnit,
     updateRSSFeeds: async () => {
@@ -1591,9 +1574,6 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     gardenBackgroundColor,
     isExpandedView,
     bedsideWidgetsEnabled,
-    weatherData,
-    weatherError,
-    weatherLastUpdated,
     temperatureUnit,
     combinedEmojiCatalog,
     registerCustomEmoji,
@@ -1630,6 +1610,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     updateFlappyEmojiStats,
     updateSlicerEmojiStats,
     updateSlicerGameStats,
+    updateHopEmojiStats,
     freeBlendsUsed,
     incrementFreeBlendsUsed,
   ]);

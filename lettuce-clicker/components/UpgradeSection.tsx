@@ -408,12 +408,16 @@ export function UpgradeSection({
                       flappyGamesPlayed: (statsById.flappyGamesPlayed || 0) + (statsByString.flappyGamesPlayed || 0),
                       slicerTimesSliced: (statsById.slicerTimesSliced || 0) + (statsByString.slicerTimesSliced || 0),
                       slicerGamesPlayed: (statsById.slicerGamesPlayed || 0) + (statsByString.slicerGamesPlayed || 0),
+                      hopBestScore: Math.max(statsById.hopBestScore || 0, statsByString.hopBestScore || 0),
+                      hopTotalScore: (statsById.hopTotalScore || 0) + (statsByString.hopTotalScore || 0),
+                      hopGamesPlayed: (statsById.hopGamesPlayed || 0) + (statsByString.hopGamesPlayed || 0),
                     };
                     
                     const hasFlappyStats = stats.flappyBestScore > 0;
                     const hasSlicerStats = stats.slicerTimesSliced > 0;
+                    const hasHopStats = stats.hopBestScore > 0;
                     
-                    if (hasFlappyStats || hasSlicerStats) {
+                    if (hasFlappyStats || hasSlicerStats || hasHopStats) {
                       return (
                         <View style={styles.gameStatsContainer}>
                           {hasFlappyStats && (
@@ -429,6 +433,14 @@ export function UpgradeSection({
                               <Text style={styles.gameStatIcon}>🔪</Text>
                               <Text style={styles.gameStatText}>
                                 Slicer: {stats.slicerTimesSliced} {stats.slicerTimesSliced === 1 ? 'slice' : 'slices'} • {stats.slicerGamesPlayed} {stats.slicerGamesPlayed === 1 ? 'game' : 'games'}
+                              </Text>
+                            </View>
+                          )}
+                          {hasHopStats && (
+                            <View style={styles.gameStatRow}>
+                              <Text style={styles.gameStatIcon}>🦘</Text>
+                              <Text style={styles.gameStatText}>
+                                Hop: Best {stats.hopBestScore} • {stats.hopGamesPlayed} {stats.hopGamesPlayed === 1 ? 'game' : 'games'}
                               </Text>
                             </View>
                           )}

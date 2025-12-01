@@ -11,6 +11,7 @@ import {
 // Use explicit extension to help TS resolver
 import FlappyLettuceGame from './FlappyLettuceGame.tsx';
 import LettuceSlicerGame from './LettuceSlicerGame';
+import { LettuceHopGame } from './LettuceHopGame';
 import type { EmojiDefinition } from '@/context/GameContext';
 
 interface GamesHubProps {
@@ -19,9 +20,11 @@ interface GamesHubProps {
   emojiInventory: Record<string, boolean>;
   emojiCatalog: EmojiDefinition[];
   customEmojiNames: Record<string, string>;
+  hasPremiumUpgrade?: boolean;
+  onPurchasePremium?: () => void;
 }
 
-type GameScreen = 'hub' | 'flappy-lettuce' | 'lettuce-slicer' | 'lettuce-dash';
+type GameScreen = 'hub' | 'flappy-lettuce' | 'lettuce-slicer' | 'lettuce-hop';
 
 interface EmojiItem {
   id?: string;
@@ -30,7 +33,7 @@ interface EmojiItem {
   name?: string;
 }
 
-export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog, customEmojiNames }: GamesHubProps) {
+export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog, customEmojiNames, hasPremiumUpgrade = false, onPurchasePremium }: GamesHubProps) {
   const [currentScreen, setCurrentScreen] = useState<GameScreen>('hub');
   const [selectedEmoji, setSelectedEmoji] = useState<EmojiItem>({ emoji: '🥬' });
 
@@ -105,9 +108,8 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
     setCurrentScreen('lettuce-slicer');
   };
 
-  const handleOpenLettuceDash = () => {
-    // Placeholder for future game
-    setCurrentScreen('lettuce-dash');
+  const handleOpenLettuceHop = () => {
+    setCurrentScreen('lettuce-hop');
   };
 
   return (
@@ -162,19 +164,29 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
               <Pressable
                 style={({ pressed }) => [
                   styles.gameCard,
-                  pressed && styles.gameCardPressed,
+                  !hasPremiumUpgrade && styles.gameCardLocked,
+                  pressed && hasPremiumUpgrade && styles.gameCardPressed,
                 ]}
-                onPress={handleOpenLettuceSlicer}
+                onPress={hasPremiumUpgrade ? handleOpenLettuceSlicer : onPurchasePremium}
                 accessibilityRole="button"
-                accessibilityLabel="Play Lettuce Slicer"
+                accessibilityLabel={hasPremiumUpgrade ? "Play Lettuce Slicer" : "Unlock Lettuce Slicer with Premium"}
               >
-                <View style={styles.gameIconContainer}>
+                {!hasPremiumUpgrade && (
+                  <View style={styles.lockOverlay}>
+                    <Text style={styles.lockIcon}>🔒</Text>
+                  </View>
+                )}
+                <View style={[styles.gameIconContainer, !hasPremiumUpgrade && styles.gameIconLocked]}>
                   <Text style={styles.gameIcon}>🔪</Text>
                 </View>
                 <View style={styles.gameInfo}>
-                  <Text style={styles.gameTitle}>Lettuce Slicer</Text>
-                  <Text style={styles.gameDescription}>
-                    Slice emojis mid-air. Avoid bombs and ghosts!
+                  <Text style={[styles.gameTitle, !hasPremiumUpgrade && styles.gameTitleLocked]}>
+                    Lettuce Slicer {!hasPremiumUpgrade && '🔒'}
+                  </Text>
+                  <Text style={[styles.gameDescription, !hasPremiumUpgrade && styles.gameDescriptionLocked]}>
+                    {hasPremiumUpgrade 
+                      ? 'Slice emojis mid-air. Avoid bombs and ghosts!'
+                      : 'Upgrade to Premium to unlock'}
                   </Text>
                 </View>
                 <Text style={styles.gameChevron}>›</Text>
@@ -183,26 +195,50 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
               <Pressable
                 style={({ pressed }) => [
                   styles.gameCard,
-                  styles.gameCardDisabled,
-                  pressed && styles.gameCardPressed,
+                  !hasPremiumUpgrade && styles.gameCardLocked,
+                  pressed && hasPremiumUpgrade && styles.gameCardPressed,
                 ]}
-                onPress={handleOpenLettuceDash}
+                onPress={hasPremiumUpgrade ? handleOpenLettuceHop : onPurchasePremium}
                 accessibilityRole="button"
-                accessibilityLabel="Lettuce Dash (Coming Soon)"
+                accessibilityLabel={hasPremiumUpgrade ? "Play Lettuce Hop" : "Unlock Lettuce Hop with Premium"}
               >
-                <View style={styles.gameIconContainer}>
-                  <Text style={styles.gameIcon}>🏃</Text>
+                {!hasPremiumUpgrade && (
+                  <View style={styles.lockOverlay}>
+                    <Text style={styles.lockIcon}>🔒</Text>
+                  </View>
+                )}
+                <View style={[styles.gameIconContainer, !hasPremiumUpgrade && styles.gameIconLocked]}>
+                  <Text style={styles.gameIcon}>🦘</Text>
                 </View>
                 <View style={styles.gameInfo}>
-                  <Text style={styles.gameTitle}>Lettuce Dash</Text>
-                  <Text style={styles.gameDescription}>
-                    Coming soon! An endless runner adventure.
+                  <Text style={[styles.gameTitle, !hasPremiumUpgrade && styles.gameTitleLocked]}>
+                    Lettuce Hop {!hasPremiumUpgrade && '🔒'}
+                  </Text>
+                  <Text style={[styles.gameDescription, !hasPremiumUpgrade && styles.gameDescriptionLocked]}>
+                    {hasPremiumUpgrade
+                      ? 'Hop up platforms and reach new heights! Avoid bombs and use rockets.'
+                      : 'Upgrade to Premium to unlock'}
                   </Text>
                 </View>
-                <View style={styles.comingSoonBadge}>
-                  <Text style={styles.comingSoonText}>Soon</Text>
-                </View>
+                <Text style={styles.gameChevron}>›</Text>
               </Pressable>
+
+              {/* Premium Paywall Card */}
+              {!hasPremiumUpgrade && (
+                <View style={styles.premiumPaywallCard}>
+                  <Text style={styles.paywallCardIcon}>⭐</Text>
+                  <Text style={styles.paywallCardTitle}>Upgrade to Premium</Text>
+                  <Text style={styles.paywallCardDescription}>
+                    Unlock all games in the arcade and enjoy unlimited fun!
+                  </Text>
+                  <Pressable 
+                    style={styles.upgradePremiumButton}
+                    onPress={onPurchasePremium}
+                  >
+                    <Text style={styles.upgradePremiumText}>Upgrade Now</Text>
+                  </Pressable>
+                </View>
+              )}
             </ScrollView>
           </View>
         ) : currentScreen === 'flappy-lettuce' ? (
@@ -218,6 +254,16 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
             onBack={handleBackToHub}
             ownedEmojis={ownedEmojiObjects}
             emojiStringToId={emojiStringToId}
+          />
+        ) : currentScreen === 'lettuce-hop' ? (
+          <LettuceHopGame
+            onBack={handleBackToHub}
+            emojiInventory={ownedEmojiObjects}
+            customEmojiNames={emojiStringToName}
+            selectedEmoji={selectedEmoji}
+            onEmojiChange={setSelectedEmoji}
+            hasPremiumUpgrade={hasPremiumUpgrade}
+            onPurchasePremium={onPurchasePremium}
           />
         ) : (
           <View style={styles.placeholderContainer}>
@@ -303,6 +349,26 @@ const styles = StyleSheet.create({
   gameCardDisabled: {
     opacity: 0.6,
   },
+  gameCardLocked: {
+    opacity: 0.7,
+    backgroundColor: '#f9fafb',
+    position: 'relative',
+  },
+  lockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  lockIcon: {
+    fontSize: 40,
+  },
   gameIconContainer: {
     width: 64,
     height: 64,
@@ -311,6 +377,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 16,
+  },
+  gameIconLocked: {
+    opacity: 0.5,
   },
   gameIcon: {
     fontSize: 36,
@@ -324,10 +393,16 @@ const styles = StyleSheet.create({
     color: '#065f46',
     marginBottom: 4,
   },
+  gameTitleLocked: {
+    color: '#9ca3af',
+  },
   gameDescription: {
     fontSize: 14,
     color: '#047857',
     lineHeight: 20,
+  },
+  gameDescriptionLocked: {
+    color: '#9ca3af',
   },
   gameChevron: {
     fontSize: 28,
@@ -371,5 +446,59 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#065f46',
+  },
+  // Premium Paywall Card
+  premiumPaywallCard: {
+    backgroundColor: '#1f2937',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#fbbf24',
+    alignItems: 'center',
+    shadowColor: '#fbbf24',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  paywallCardIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  paywallCardTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#fbbf24',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  paywallCardDescription: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#d1d5db',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  upgradePremiumButton: {
+    backgroundColor: '#fbbf24',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+    shadowColor: '#fbbf24',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  upgradePremiumText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1f2937',
   },
 });

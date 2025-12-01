@@ -28,7 +28,6 @@ import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import type { EmojiDefinition, HomeEmojiTheme } from '@/context/GameContext';
 import { useAmbientAudio } from '@/context/AmbientAudioContext';
 import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
-import { formatTemperature, getDisplayTemperature, detectTemperatureUnitFromLocation } from '@/lib/weatherUtils';
 import { TemperatureUnitModal } from '@/components/TemperatureUnitModal';
 import { RSSWidget } from '@/components/RSSWidget';
 import { GamesHub } from '@/components/GamesHub';
@@ -179,17 +178,13 @@ export default function HomeScreen() {
     grantEmojiUnlock,
     bedsideWidgetsEnabled,
     hasPremiumUpgrade,
-    weatherData,
-    weatherError,
-    weatherLastUpdated,
+    purchasePremiumUpgrade,
     temperatureUnit,
     hasManuallySetTemperatureUnit,
     rssFeeds,
     rssItems,
     rssError,
     rssLastUpdated,
-    updateWeatherData,
-    clearWeatherData,
     setTemperatureUnit,
     setHasManuallySetTemperatureUnit,
     updateRSSFeeds,
@@ -451,10 +446,6 @@ export default function HomeScreen() {
     () => Object.values(emojiInventory).filter(Boolean).length,
     [emojiInventory]
   );
-  const displayTemperature = useMemo(() => {
-    if (!weatherData) return null;
-    return getDisplayTemperature(weatherData.temperature, temperatureUnit);
-  }, [weatherData, temperatureUnit]);
   const quickActionRotations = useMemo(
     () => ({
       music: quickActionWiggles.music.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
@@ -728,37 +719,6 @@ export default function HomeScreen() {
   }, []);
 
 
-
-  const handleWeatherPress = useCallback(async () => {
-    if (weatherData) {
-      // Toggle temperature settings container
-      setShowTemperatureSettings(!showTemperatureSettings);
-    } else {
-      // First time or error - try to fetch weather
-      await updateWeatherData();
-    }
-  }, [weatherData, showTemperatureSettings, updateWeatherData]);
-
-  // Auto-fetch weather when bedside widgets are first enabled
-  useEffect(() => {
-    if (bedsideWidgetsEnabled && !weatherData && !weatherError) {
-      // Fetch weather with a small delay to avoid overwhelming the API
-      const timer = setTimeout(() => {
-        updateWeatherData();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [bedsideWidgetsEnabled, weatherData, weatherError, updateWeatherData]);
-
-  // Auto-detect temperature unit based on location (only if user hasn't manually set it)
-  useEffect(() => {
-    if (weatherData && weatherData.location && !hasManuallySetTemperatureUnit) {
-      const detectedUnit = detectTemperatureUnitFromLocation(weatherData.location);
-      if (detectedUnit !== temperatureUnit) {
-        setTemperatureUnit(detectedUnit);
-      }
-    }
-  }, [weatherData, temperatureUnit, setTemperatureUnit, hasManuallySetTemperatureUnit]);
 
   const handleSelectTheme = useCallback(
     (theme: HomeEmojiTheme) => {
@@ -1889,6 +1849,8 @@ export default function HomeScreen() {
         emojiInventory={emojiInventory}
         emojiCatalog={gardenEmojiCatalog}
         customEmojiNames={customEmojiNames}
+        hasPremiumUpgrade={hasPremiumUpgrade}
+        onPurchasePremium={purchasePremiumUpgrade}
       />
 
       <TemperatureUnitModal
@@ -1896,7 +1858,7 @@ export default function HomeScreen() {
         onClose={() => setShowTemperatureUnitModal(false)}
         currentUnit={temperatureUnit}
         onSelectUnit={setTemperatureUnit}
-        sampleTemperature={weatherData?.temperature || 22}
+        sampleTemperature={22}
       />
     </>
   );
