@@ -108,6 +108,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName="garden"
       screenOptions={{
         tabBarActiveTintColor: baseAccent,
         tabBarInactiveTintColor: inactiveAccent,

@@ -268,7 +268,6 @@ export default function HomeScreen() {
   const quickActionWiggles = useRef({
     music: new Animated.Value(0),
     bonus: new Animated.Value(0),
-    themes: new Animated.Value(0),
     widgets: new Animated.Value(0),
     games: new Animated.Value(0),
   }).current;
@@ -460,7 +459,6 @@ export default function HomeScreen() {
     () => ({
       music: quickActionWiggles.music.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
       bonus: quickActionWiggles.bonus.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
-      themes: quickActionWiggles.themes.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
       widgets: quickActionWiggles.widgets.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
       games: quickActionWiggles.games.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
     }),
@@ -1564,46 +1562,6 @@ export default function HomeScreen() {
                         <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Games Arcade</Text>
                         <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
                           Play with your emoji collection
-                        </Text>
-                      </View>
-                      <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">
-                        <Text style={[styles.menuItemChevron, styles.quickActionChevron]}>›</Text>
-                      </View>
-                    </Pressable>
-                    <Pressable
-                      style={({ pressed }) => [
-                        styles.menuItemCard,
-                        styles.quickActionCard,
-                        pressed && styles.menuItemCardPressed,
-                      ]}
-                      onPress={() => setMenuPage('themes')}
-                      accessibilityRole="button"
-                    >
-                      <Pressable
-                        style={styles.quickActionIconPressable}
-                        onPress={handleQuickActionEmojiPress('themes')}
-                        accessibilityRole="button"
-                        accessibilityLabel="Animate themes emoji"
-                        hitSlop={8}
-                      >
-                        <Animated.View
-
-
-                          style={[
-                            styles.menuItemIconWrap,
-                            styles.quickActionIconWrap,
-                            { transform: [{ rotate: quickActionRotations.themes }] },
-                          ]}
-                        >
-                          <Text style={[styles.menuItemIcon, styles.quickActionIcon]}>
-                            {activeThemeDefinition?.emoji ?? '✨'}
-                          </Text>
-                        </Animated.View>
-                      </Pressable>
-                      <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Themes Workshop</Text>
-                        <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
-                          {themeOverviewSubtitle}
                         </Text>
                       </View>
                       <View style={[styles.menuItemMeta, styles.quickActionMeta]} pointerEvents="none">

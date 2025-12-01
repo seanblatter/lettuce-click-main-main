@@ -8,17 +8,13 @@ import { AppThemeProvider, useAppTheme } from '@/context/ThemeContext';
 import { GameProvider } from '@/context/GameContext';
 import { AmbientAudioProvider } from '@/context/AmbientAudioContext';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
-
 function RootNavigation() {
   const { colorScheme } = useAppTheme();
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack initialRouteName="(tabs)">
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} initialParams={{ screen: 'garden' }} />
         <Stack.Screen
           name="modal"
           options={{ presentation: 'modal', title: 'Modal', animation: 'slide_from_bottom' }}

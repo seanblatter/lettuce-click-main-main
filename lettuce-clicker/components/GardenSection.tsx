@@ -38,7 +38,7 @@ import Animated, {
 import { captureRef } from 'react-native-view-shot';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { computeBellCurveCost, emojiCategoryOrder, formatClickValue } from '@/constants/emojiCatalog';
+import { computeBellCurveCost, emojiCategoryOrder, formatClickValue, MIN_EMOJI_COST } from '@/constants/emojiCatalog';
 import { EmojiDefinition, Placement, TextStyleId, WidgetPromenadeEntry } from '@/context/GameContext';
 import { fetchEmojiKitchenMash, formatCustomEmojiName, getRandomCompatibleEmoji } from '@/lib/emojiKitchenService';
 
@@ -66,6 +66,8 @@ type Props = {
   hasPremiumUpgrade: boolean;
   purchasePremiumUpgrade: () => void;
   setCustomEmojiName: (emojiId: string, newName: string) => void;
+  freeBlendsUsed: number;
+  incrementFreeBlendsUsed: () => void;
   title?: string;
 };
 
@@ -327,6 +329,8 @@ export function GardenSection({
   hasPremiumUpgrade,
   purchasePremiumUpgrade,
   setCustomEmojiName,
+  freeBlendsUsed,
+  incrementFreeBlendsUsed,
   title = 'Lettuce Gardens',
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -359,10 +363,7 @@ export function GardenSection({
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
   const [textDraft, setTextDraft] = useState('');
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyleId>('sprout');
-  const [textScale, setTextScale] = useState(1);
-  const [textSliderWidth, setTextSliderWidth] = useState(0);
-  const isDraggingSlider = useRef(false);
-  const pendingSliderUpdate = useRef<number | null>(null);
+  const [textScale] = useState(1); // Fixed at 1.0, users resize by dragging
   const [shopEmoji, setShopEmoji] = useState('🏡');
   const [inventoryEmoji, setInventoryEmoji] = useState('🧰');
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
@@ -394,25 +395,6 @@ export function GardenSection({
   const [isEditingBlendName, setIsEditingBlendName] = useState(false);
   const [editedBlendName, setEditedBlendName] = useState('');
   
-  // Debug shopPreview state changes
-  useEffect(() => {
-    console.log('🔍 shopPreview state changed:', shopPreview ? shopPreview.name : 'null');
-  }, [shopPreview]);
-
-  // Reset text slider width on orientation change to ensure proper recalculation
-  useEffect(() => {
-    setTextSliderWidth(0);
-  }, [isLandscape]);
-
-  // Cleanup animation frame on unmount
-  useEffect(() => {
-    return () => {
-      if (pendingSliderUpdate.current !== null) {
-        cancelAnimationFrame(pendingSliderUpdate.current);
-      }
-    };
-  }, []);
-
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
   const canvasRef = useRef<View | null>(null);
@@ -593,6 +575,9 @@ export function GardenSection({
     [activeCategory]
   );
 
+  // Track assigned costs to ensure uniqueness
+  const assignedCostsRef = useRef<Map<number, string>>(new Map());
+  
   const computeKitchenEmojiCost = useCallback((emojiValue: string) => {
     const codePoints = Array.from(emojiValue).map((char) => char.codePointAt(0) ?? 0);
 
@@ -602,7 +587,34 @@ export function GardenSection({
 
     const hash = codePoints.reduce((accumulator, point) => (accumulator * 257 + point) % 1_000_003, 0);
     const normalized = hash / 1_000_003;
-    return computeBellCurveCost(normalized);
+    let baseCost = computeBellCurveCost(normalized);
+    
+    // Check if this cost is already assigned to a different emoji
+    const existingEmoji = assignedCostsRef.current.get(baseCost);
+    if (existingEmoji && existingEmoji !== emojiValue) {
+      // Find a unique cost by incrementing/decrementing slightly
+      let offset = 1;
+      const maxOffset = 50;
+      while (offset <= maxOffset) {
+        // Try adding offset first
+        const adjustedCost = baseCost + offset;
+        if (!assignedCostsRef.current.has(adjustedCost)) {
+          baseCost = adjustedCost;
+          break;
+        }
+        // Try subtracting offset
+        const adjustedCostDown = baseCost - offset;
+        if (adjustedCostDown >= MIN_EMOJI_COST && !assignedCostsRef.current.has(adjustedCostDown)) {
+          baseCost = adjustedCostDown;
+          break;
+        }
+        offset++;
+      }
+    }
+    
+    // Register this emoji with its cost
+    assignedCostsRef.current.set(baseCost, emojiValue);
+    return baseCost;
   }, []);
 
   useEffect(() => {
@@ -627,11 +639,6 @@ export function GardenSection({
   }, [activeCategory]);
 
   const handleBlendCustomEmoji = useCallback(async () => {
-    if (!hasPremiumUpgrade) {
-      setCustomBlendError('Upgrade to blend custom Emoji Kitchen stickers.');
-      return;
-    }
-
     setCustomBlendError(null);
     setIsLoadingCustomBlend(true);
 
@@ -652,20 +659,13 @@ export function GardenSection({
     } finally {
       setIsLoadingCustomBlend(false);
     }
-  }, [computeKitchenEmojiCost, customEmojiLeft, customEmojiRight, hasPremiumUpgrade]);
+  }, [computeKitchenEmojiCost, customEmojiLeft, customEmojiRight]);
 
   // Auto-blend when both emojis are present
   useEffect(() => {
-    if (hasPremiumUpgrade && customEmojiLeft && customEmojiRight && customEmojiLeft.trim().length > 0 && customEmojiRight.trim().length > 0) {
+    if (customEmojiLeft && customEmojiRight && customEmojiLeft.trim().length > 0 && customEmojiRight.trim().length > 0) {
       // Call blend directly without including it in dependencies to avoid infinite loops
       const blendEmojis = async () => {
-        console.log('🎨 Starting blend:', customEmojiLeft, '+', customEmojiRight);
-        
-        if (!hasPremiumUpgrade) {
-          setCustomBlendError('Upgrade to blend custom Emoji Kitchen stickers.');
-          return;
-        }
-
         setCustomBlendError(null);
         setIsLoadingCustomBlend(true);
 
@@ -674,12 +674,10 @@ export function GardenSection({
           const compositeEmoji = `${customEmojiLeft}${customEmojiRight}`;
           const estimatedCost = computeKitchenEmojiCost(compositeEmoji);
           
-          console.log('✅ Blend success:', result.imageUrl);
           setCustomBlendPreview(result.imageUrl);
           setCustomBlendDescription(result.description);
           setCustomBlendCost(estimatedCost);
         } catch (error) {
-          console.error('❌ Blend failed:', error);
           setCustomBlendPreview(null);
           setCustomBlendDescription('');
           setCustomBlendCost(null);
@@ -705,7 +703,7 @@ export function GardenSection({
 
     try {
       let attempts = 0;
-      const maxAttempts = 5;
+      const maxAttempts = 15;
       
       while (attempts < maxAttempts) {
         // Pick a random base emoji
@@ -715,25 +713,46 @@ export function GardenSection({
         const right = await getRandomCompatibleEmoji(left);
         
         if (right) {
-          setCustomEmojiLeft(left);
-          setCustomEmojiRight(right);
-          break;
+          // Test if this combination actually works before setting it
+          try {
+            const testResult = await fetchEmojiKitchenMash(left, right);
+            
+            if (testResult && testResult.imageUrl) {
+              // Calculate the estimated cost for this blend
+              const compositeEmoji = `${left}${right}`;
+              const estimatedCost = computeKitchenEmojiCost(compositeEmoji);
+              
+              // If in low-to-high mode, only accept blends user can afford
+              if (priceSortOrder === 'asc') {
+                if (estimatedCost <= harvest) {
+                  setCustomEmojiLeft(left);
+                  setCustomEmojiRight(right);
+                  break;
+                }
+              } else {
+                // In high-to-low mode, accept any blend
+                setCustomEmojiLeft(left);
+                setCustomEmojiRight(right);
+                break;
+              }
+            }
+          } catch (testError) {
+            // This combination doesn't work, try again
+          }
         }
         
         attempts++;
       }
       
+      // Silently stop loading if we couldn't find a blend - don't show error
       if (attempts >= maxAttempts) {
-        // Fallback if we can't find a match quickly (unlikely but safe)
-        const pick = () => candidates[Math.floor(Math.random() * candidates.length)].emoji;
-        setCustomEmojiLeft(pick());
-        setCustomEmojiRight(pick());
+        setIsLoadingCustomBlend(false);
       }
     } catch (error) {
-      console.warn('Randomize blend failed:', error);
+      // Silently handle error - don't show error message
       setIsLoadingCustomBlend(false);
     }
-  }, [emojiCatalog]);
+  }, [emojiCatalog, computeKitchenEmojiCost, priceSortOrder, harvest]);
 
   const handlePurchaseCustomBlend = useCallback(async () => {
     if (!customBlendPreview) {
@@ -743,6 +762,19 @@ export function GardenSection({
 
     const compositeEmoji = `${customEmojiLeft}${customEmojiRight}`;
     const blendCost = customBlendCost ?? computeKitchenEmojiCost(compositeEmoji);
+
+    // Check free blend limit for non-premium users
+    if (!hasPremiumUpgrade) {
+      if (blendCost >= 100000) {
+        setCustomBlendError('Premium required: This blend costs 100K+ clicks. Upgrade to unlock it.');
+        return;
+      }
+      
+      if (freeBlendsUsed >= 5) {
+        setCustomBlendError('Free blend limit reached. Upgrade to Premium for unlimited blends.');
+        return;
+      }
+    }
 
     // First, register the custom emoji and get the definition immediately
     const definition = (registerCustomEmoji as any)(compositeEmoji, {
@@ -772,6 +804,11 @@ export function GardenSection({
       return;
     }
 
+    // Increment free blend counter for non-premium users
+    if (!hasPremiumUpgrade) {
+      incrementFreeBlendsUsed();
+    }
+
     setCustomBlendError(null);
     setSelectedEmoji(definition.id);
     setShopPreview(null); // Don't set shopPreview for custom blends - handled in the Emoji Kitchen card
@@ -785,6 +822,9 @@ export function GardenSection({
     emojiInventory,
     purchaseEmoji,
     registerCustomEmoji,
+    hasPremiumUpgrade,
+    freeBlendsUsed,
+    incrementFreeBlendsUsed,
   ]);
 
   const filteredShopInventory = useMemo(() => {
@@ -795,6 +835,25 @@ export function GardenSection({
         : filtered;
 
     const sorter = (a: InventoryEntry, b: InventoryEntry) => {
+      // For custom category, prioritize items based on user's harvest and sort order
+      if (activeCategory === 'custom') {
+        const canAffordA = harvest >= a.cost;
+        const canAffordB = harvest >= b.cost;
+        
+        if (priceSortOrder === 'asc') {
+          // Low to high: only show affordable items, sorted by cost
+          if (canAffordA && !canAffordB) return -1;
+          if (!canAffordA && canAffordB) return 1;
+          return a.cost - b.cost;
+        } else {
+          // High to low: prioritize affordable items first, then by cost descending
+          if (canAffordA && !canAffordB) return -1;
+          if (!canAffordA && canAffordB) return 1;
+          return b.cost - a.cost;
+        }
+      }
+      
+      // Default sorting for other categories
       if (a.cost === b.cost) {
         if (a.popularity === b.popularity) {
           return a.name.localeCompare(b.name);
@@ -805,15 +864,11 @@ export function GardenSection({
       return priceSortOrder === 'asc' ? a.cost - b.cost : b.cost - a.cost;
     };
 
-    const sorted = [...baseList].sort(sorter);
+    let sorted = [...baseList].sort(sorter);
     
-    // Debug logging for custom blends
-    if (activeCategory === 'custom') {
-      const customItems = inventoryList.filter(item => item.id.startsWith('custom-'));
-      console.log('🧪 DEBUG Custom Category:');
-      console.log('  - Total custom items in inventory:', customItems.length);
-      console.log('  - Filtered custom items:', sorted.length);
-      console.log('  - Custom items:', customItems.map(i => ({ id: i.id, name: i.name, hasImage: !!i.imageUrl })));
+    // Filter out unaffordable items when in custom category with low-to-high sort
+    if (activeCategory === 'custom' && priceSortOrder === 'asc') {
+      sorted = sorted.filter(item => harvest >= item.cost);
     }
 
     return sorted;
@@ -825,6 +880,7 @@ export function GardenSection({
     normalizedFilter,
     priceSortOrder,
     activeCategory,
+    harvest,
   ]);
   const filteredOwnedInventory = useMemo(() => {
     const filtered = ownedInventory.filter((item) => matchesCategory(item) && matchesFilter(item));
@@ -1240,70 +1296,6 @@ export function GardenSection({
     }
   }, [addTextPlacement, getCanvasCenter, penColor, selectedTextStyle, setShowPalette, textDraft, textScale]);
 
-  const handleTextSliderChange = useCallback(
-    (locationX: number, isImmediate: boolean = false) => {
-      if (textSliderWidth <= 0) {
-        return;
-      }
-
-      const ratio = clamp(locationX / textSliderWidth, 0, 1);
-      const nextScale = TEXT_SCALE_MIN + ratio * (TEXT_SCALE_MAX - TEXT_SCALE_MIN);
-      const roundedScale = Number(nextScale.toFixed(2));
-
-      if (isImmediate || !isDraggingSlider.current) {
-        // Immediate update for taps or when not dragging
-        setTextScale(roundedScale);
-      } else {
-        // Throttled update for dragging to prevent glitches
-        if (pendingSliderUpdate.current !== null) {
-          cancelAnimationFrame(pendingSliderUpdate.current);
-        }
-        
-        pendingSliderUpdate.current = requestAnimationFrame(() => {
-          setTextScale(roundedScale);
-          pendingSliderUpdate.current = null;
-        });
-      }
-    },
-    [textSliderWidth]
-  );
-
-  const textScalePanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (event) => {
-          isDraggingSlider.current = false; // Start with tap behavior
-          handleTextSliderChange(event.nativeEvent.locationX, true); // Immediate update for initial tap
-        },
-        onPanResponderMove: (event, gestureState) => {
-          // Only consider it dragging if there's actual movement
-          if (Math.abs(gestureState.dx) > 3 || Math.abs(gestureState.dy) > 3) {
-            isDraggingSlider.current = true;
-          }
-          handleTextSliderChange(event.nativeEvent.locationX, false); // Throttled updates during drag
-        },
-        onPanResponderRelease: () => {
-          isDraggingSlider.current = false;
-          // Cancel any pending updates
-          if (pendingSliderUpdate.current !== null) {
-            cancelAnimationFrame(pendingSliderUpdate.current);
-            pendingSliderUpdate.current = null;
-          }
-        },
-        onPanResponderTerminate: () => {
-          isDraggingSlider.current = false;
-          if (pendingSliderUpdate.current !== null) {
-            cancelAnimationFrame(pendingSliderUpdate.current);
-            pendingSliderUpdate.current = null;
-          }
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [handleTextSliderChange]
-  );
-
   const handlePlacementDragBegin = useCallback(
     (placementId: string, center: { x: number; y: number }) => {
       if (isDrawingMode) {
@@ -1516,18 +1508,6 @@ export function GardenSection({
     []
   );
 
-  const clampedTextScale = clamp(textScale, TEXT_SCALE_MIN, TEXT_SCALE_MAX);
-  const textScaleRatio =
-    TEXT_SCALE_MAX - TEXT_SCALE_MIN === 0
-      ? 0
-      : (clampedTextScale - TEXT_SCALE_MIN) / (TEXT_SCALE_MAX - TEXT_SCALE_MIN);
-  const sliderTrackWidth = Math.max(textSliderWidth - 28, 0);
-  const sliderFillWidth = Math.max(sliderTrackWidth * textScaleRatio, 0);
-  const sliderThumbLeft = clamp(
-    14 + sliderFillWidth - TEXT_SLIDER_THUMB_SIZE / 2,
-    0,
-    Math.max(textSliderWidth - TEXT_SLIDER_THUMB_SIZE, 0)
-  );
   const selectedTextStyleOption = useMemo(
     () => TEXT_STYLE_OPTIONS.find((option) => option.id === selectedTextStyle) ?? TEXT_STYLE_OPTIONS[0],
     [selectedTextStyle]
@@ -2236,27 +2216,6 @@ export function GardenSection({
                       })}
                     </View>
                   ) : null}
-                  <Text style={styles.paletteLabel}>Text size</Text>
-                  <View style={[styles.textSizeControls, isLandscape && styles.textSizeControlsLandscape]}>
-                    <Text style={styles.textSizeGlyphSmall}>A</Text>
-                    <View
-                      key={`text-slider-${isLandscape ? 'landscape' : 'portrait'}`}
-                      style={[styles.textSizeSlider, isLandscape && styles.textSizeSliderLandscape]}
-                      onLayout={({ nativeEvent }) => setTextSliderWidth(Math.max(nativeEvent.layout.width, 0))}
-                      {...textScalePanResponder.panHandlers}
-                      accessibilityRole="adjustable"
-                      accessibilityLabel="Adjust text size"
-                      accessibilityValue={{ text: `${Math.round(clampedTextScale * 100)} percent` }}
-                    >
-                      <View style={[styles.textSizeSliderTrack, isLandscape && styles.textSizeSliderTrackLandscape]} />
-                      <View style={[styles.textSizeSliderFill, { width: sliderFillWidth }, isLandscape && styles.textSizeSliderFillLandscape]} />
-                      <View style={[styles.textSizeSliderThumb, { left: sliderThumbLeft }, isLandscape && styles.textSizeSliderThumbLandscape]} />
-                    </View>
-                    <Text style={styles.textSizeGlyphLarge}>A</Text>
-                    <View style={styles.textSizeValuePill}>
-                      <Text style={styles.textSizeValueText}>{Math.round(clampedTextScale * 100)}%</Text>
-                    </View>
-                  </View>
                   <TextInput
                     style={styles.textComposerInput}
                     value={textDraft}
@@ -2288,7 +2247,7 @@ export function GardenSection({
                     </Text>
                   </Pressable>
                   <Text style={styles.textComposerHint}>
-                    Uses the active pen color for the text fill. Swipe the size slider to grow or shrink your note.
+                    Uses the active pen color for the text fill. Drag corners to resize, rotate, or move your text.
                   </Text>
                 </View>
               </View>
@@ -2438,19 +2397,26 @@ export function GardenSection({
             {activeCategory === 'custom' && (
               <View style={styles.customBlendCard}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={styles.customBlendTitle}>Create with Emoji Kitchen</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.customBlendTitle}>Create with Emoji Kitchen</Text>
+                    {!hasPremiumUpgrade && (
+                      <Text style={{ fontSize: 12, color: freeBlendsUsed >= 5 ? '#ef4444' : '#64748b', marginTop: 4 }}>
+                        {freeBlendsUsed < 5 
+                          ? `${5 - freeBlendsUsed} free blend${5 - freeBlendsUsed === 1 ? '' : 's'} remaining (under 100K clicks)`
+                          : 'Free blend limit reached. Upgrade for unlimited blends.'}
+                      </Text>
+                    )}
+                  </View>
                   <Pressable onPress={handleRandomizeBlend} style={{ padding: 4 }}>
                     <Text style={{ fontSize: 24 }}>🎲</Text>
                   </Pressable>
                 </View>
                 <Text style={styles.customBlendCopy}>
-                  Pick two emoji to blend into a brand-new garden decoration. Premium members can purchase the mashup to
-                  add it to their inventory.
+                  Pick two emoji to blend into a brand-new garden decoration.
                 </Text>
 
-                {hasPremiumUpgrade ? (
-                  <>
-                    <View style={styles.customBlendInputs}>
+                <>
+                  <View style={styles.customBlendInputs}>
                       <View style={styles.customBlendInputContainer}>
                         <TextInput
                           style={[styles.customBlendInput, { color: '#0f172a' }]}
@@ -2494,8 +2460,21 @@ export function GardenSection({
 
                     {customBlendError ? <Text style={styles.customBlendError}>{customBlendError}</Text> : null}
                     
-                    {/* Always show blend preview for premium users - even during loading or errors */}
-                    {(() => {
+                    {/* Show paywall immediately if limit reached */}
+                    {!hasPremiumUpgrade && freeBlendsUsed >= 5 ? (
+                      <View style={styles.customBlendUpsell}>
+                        <Text style={styles.customBlendUpsellTitle}>Free blend limit reached</Text>
+                        <Text style={styles.customBlendUpsellCopy}>
+                          You've used all 5 free blends! Upgrade to Premium for unlimited Emoji Kitchen mashups, premium accents, and special garden backgrounds.
+                        </Text>
+                        <Pressable style={styles.customBlendUpsellButton} onPress={purchasePremiumUpgrade}>
+                          <Text style={styles.customBlendUpsellButtonText}>Upgrade to Premium</Text>
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <>
+                        {/* Show blend preview and purchase options */}
+                        {(() => {
                       const compositeEmoji = `${customEmojiLeft}${customEmojiRight}`;
                       const blendDefinition = emojiCatalog.find((e) => e.emoji === compositeEmoji && e.id.startsWith('custom-'));
                       const isOwned = blendDefinition && emojiInventory[blendDefinition.id];
@@ -2663,18 +2642,9 @@ export function GardenSection({
                         </Pressable>
                       );
                     })()}
-                  </>
-                ) : (
-                  <View style={styles.customBlendUpsell}>
-                    <Text style={styles.customBlendUpsellTitle}>Premium required</Text>
-                    <Text style={styles.customBlendUpsellCopy}>
-                      Upgrade to unlock Emoji Kitchen mashups, premium accents, and special garden backgrounds.
-                    </Text>
-                    <Pressable style={styles.customBlendUpsellButton} onPress={purchasePremiumUpgrade}>
-                      <Text style={styles.customBlendUpsellButtonText}>Upgrade to Premium</Text>
-                    </Pressable>
-                  </View>
-                )}
+                      </>
+                    )}
+                </>
               </View>
             )}
 
@@ -2756,7 +2726,19 @@ export function GardenSection({
                                   flex: 1,
                                 }}
                                 onPress={() => {
-                                  const success = purchaseEmoji(shopPreview.id);
+                                  // Check if emoji exists in current catalog
+                                  let definition = emojiCatalog.find(e => e.id === shopPreview.id || e.emoji === shopPreview.emoji);
+                                  
+                                  // If not found, register it now
+                                  if (!definition && shopPreview.emoji) {
+                                    definition = registerCustomEmoji(shopPreview.emoji);
+                                  }
+                                  
+                                  // Purchase with the definition
+                                  const success = definition 
+                                    ? purchaseEmoji(definition.id, definition)
+                                    : purchaseEmoji(shopPreview.id);
+                                    
                                   if (success) {
                                     setShopPreview(null);
                                   }
@@ -2975,8 +2957,14 @@ export function GardenSection({
                     </View>
                     <View style={styles.emojiStatsDetails}>
                       <Text style={styles.emojiStatsDescription}>{formatEmojiDescription(selectedInventoryEmoji)}</Text>
-                      <View style={styles.emojiStatsTags}>
-                        {selectedInventoryEmoji.tags.slice(0, 3).map((tag, index) => (
+                      
+                      {/* Purchase Cost */}
+                      <View style={styles.emojiCostContainer}>
+                        <Text style={styles.emojiCostLabel}>💰 Purchase Cost:</Text>
+                        <Text style={styles.emojiCostValue}>{formatClickValue(selectedInventoryEmoji.cost)}</Text>
+                      </View>
+                      
+                      <View style={styles.emojiStatsTags}>{selectedInventoryEmoji.tags.slice(0, 3).map((tag, index) => (
                           <View key={index} style={styles.emojiStatsTag}>
                             <Text style={styles.emojiStatsTagText}>#{tag}</Text>
                           </View>
@@ -4242,6 +4230,20 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
   },
+  inventoryPriceTag: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  inventoryPriceText: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#fbbf24',
+  },
   customBlendCard: {
     backgroundColor: '#ecfeff',
     borderRadius: 16,
@@ -5092,6 +5094,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
     lineHeight: 20,
+  },
+  emojiCostContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+  },
+  emojiCostLabel: {
+    fontSize: 13,
+    color: '#78350f',
+    fontWeight: '600',
+  },
+  emojiCostValue: {
+    fontSize: 15,
+    color: '#92400e',
+    fontWeight: '700',
   },
   emojiStatsTags: {
     flexDirection: 'row',

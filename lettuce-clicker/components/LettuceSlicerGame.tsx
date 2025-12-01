@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -266,16 +266,6 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis, emojiStringToId
         
         lastTouchPos.current = { x, y };
         
-        console.log('🎯 Touch start:', { 
-          x, 
-          y, 
-          pageX: touch.pageX, 
-          pageY: touch.pageY,
-          locationX: touch.locationX,
-          locationY: touch.locationY,
-          started: startedRef.current 
-        });
-        
         setTrailPoints((prev) => [...prev, { x, y, timestamp: Date.now(), color: trailColorRef.current }]);
         checkSlice(x, y);
       },
@@ -298,7 +288,7 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis, emojiStringToId
         const dx = x - lastX;
         const dy = y - lastY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const steps = Math.max(1, Math.floor(dist / 5)); // Point every 5 pixels
+        const steps = Math.max(1, Math.floor(dist / 10)); // Point every 10 pixels for better performance
         
         const newPoints: TrailPoint[] = [];
         for (let i = 1; i <= steps; i++) {
@@ -314,10 +304,13 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis, emojiStringToId
           });
         }
         
-        setTrailPoints((prev) => [...prev, ...newPoints]);
+        setTrailPoints((prev) => {
+          const updated = [...prev, ...newPoints];
+          return updated.length > 100 ? updated.slice(-100) : updated; // Limit to 100 points for performance
+        });
         
-        // Add sparkles if color has sparkle effect
-        if (trailSparkleRef.current && Math.random() < 0.3) {
+        // Add sparkles if color has sparkle effect (reduced frequency for performance)
+        if (trailSparkleRef.current && Math.random() < 0.15) {
           const sparkleX = x + (Math.random() - 0.5) * 20;
           const sparkleY = y + (Math.random() - 0.5) * 20;
           setSparklePoints((prev) => [...prev, { 
@@ -330,18 +323,16 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis, emojiStringToId
         checkSlice(x, y, dx, dy);
       },
       onPanResponderRelease: () => {
-        console.log('🔚 Touch end');
+        // Trail will fade naturally
       },
     })
   ).current;
 
   // Check if touch slices any emoji
-  const checkSlice = (touchX: number, touchY: number, swipeDx: number = 0, swipeDy: number = 0) => {
+  const checkSlice = useCallback((touchX: number, touchY: number, swipeDx: number = 0, swipeDy: number = 0) => {
     const slicedEmojis: string[] = [];
     
     setEntities((prev) => {
-      console.log('🔍 Checking slice at', { touchX, touchY }, 'against', prev.length, 'entities');
-      
       let slicedAny = false;
       const updated = prev.map((e) => {
         if (e.sliced) return e;
@@ -350,12 +341,9 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis, emojiStringToId
         const dy = touchY - e.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         
-        console.log('  📏 Entity', e.emoji, 'at', { x: e.x, y: e.y }, 'distance:', dist.toFixed(1), 'threshold:', e.radius + 30);
-        
         if (dist < e.radius + 30) {
           // Calculate slice angle from swipe direction
           const sliceAngle = Math.atan2(swipeDy, swipeDx);
-          console.log('💥 SLICED:', e.emoji, 'at', { x: e.x, y: e.y }, 'angle:', (sliceAngle * 180 / Math.PI).toFixed(0), '°');
           slicedAny = true;
           
           if (e.emoji === '💣' || e.emoji === '👻') {
@@ -381,7 +369,6 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis, emojiStringToId
               else if (newCombo >= 3) points = 2; // 2x for 3+ combo
               
               setScore((s) => s + points);
-              console.log('🔥 Combo:', newCombo, 'Points:', points);
               return newCombo;
             });
             
@@ -396,9 +383,6 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis, emojiStringToId
         return e;
       });
       
-      if (slicedAny) {
-        console.log('🔪 Slice detected!');
-      }
       return updated;
     });
     
@@ -406,7 +390,7 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis, emojiStringToId
     slicedEmojis.forEach(emoji => {
       updateSlicerEmojiStats(emoji);
     });
-  };
+  }, [emojiStringToId, updateSlicerEmojiStats]);
 
   return (
     <View style={styles.container}>
@@ -429,7 +413,6 @@ export default function LettuceSlicerGame({ onBack, ownedEmojis, emojiStringToId
         onLayout={(e) => {
           const { x, y, width, height } = e.nativeEvent.layout;
           gameAreaLayout.current = { x, y, width, height };
-          console.log('📐 Game area layout:', { x, y, width, height });
         }}
       >
         {/* Background */}

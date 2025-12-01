@@ -23,6 +23,8 @@ export default function GardenScreen() {
     hasPremiumUpgrade,
     purchasePremiumUpgrade,
     setCustomEmojiName,
+    freeBlendsUsed,
+    incrementFreeBlendsUsed,
   } = useGame();
 
   return (
@@ -45,6 +47,8 @@ export default function GardenScreen() {
         hasPremiumUpgrade={hasPremiumUpgrade}
         purchasePremiumUpgrade={purchasePremiumUpgrade}
         setCustomEmojiName={setCustomEmojiName}
+        freeBlendsUsed={freeBlendsUsed}
+        incrementFreeBlendsUsed={incrementFreeBlendsUsed}
       />
     </SafeAreaView>
   );

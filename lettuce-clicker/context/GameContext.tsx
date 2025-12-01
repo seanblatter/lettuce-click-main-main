@@ -160,7 +160,9 @@ type GameContextValue = {
   widgetPromenade: WidgetPromenadeEntry[];
   emojiGameStats: Record<string, EmojiGameStats>;
   customEmojiNames: Record<string, string>;
+  freeBlendsUsed: number;
   setCustomEmojiName: (emojiId: string, customName: string) => void;
+  incrementFreeBlendsUsed: () => void;
   updateFlappyEmojiStats: (emojiId: string, score: number, isGameEnd: boolean) => void;
   updateSlicerEmojiStats: (emojiId: string) => void;
   updateSlicerGameStats: (emojiIds: string[]) => void;
@@ -611,6 +613,7 @@ type StoredGameState = {
   rssFeeds?: RSSFeed[];
   widgetPromenade?: WidgetPromenadeEntry[];
   emojiGameStats?: Record<string, EmojiGameStats>;
+  freeBlendsUsed?: number;
 };
 
 const GameContext = createContext<GameContextValue | undefined>(undefined);
@@ -654,6 +657,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [rssLastUpdated, setRssLastUpdated] = useState(0);
   const [widgetPromenade, setWidgetPromenade] = useState<WidgetPromenadeEntry[]>([]);
   const [emojiGameStats, setEmojiGameStats] = useState<Record<string, EmojiGameStats>>({});
+  const [freeBlendsUsed, setFreeBlendsUsed] = useState(0);
   const initialisedRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundInfoRef = useRef<
@@ -846,6 +850,10 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       stripVariationSelectors,
     ]
   );
+
+  const incrementFreeBlendsUsed = useCallback(() => {
+    setFreeBlendsUsed((prev) => prev + 1);
+  }, []);
 
   const combinedEmojiCatalog = useMemo(
     () => [...gardenEmojiCatalog, ...Object.values(customEmojiCatalog)].map(emoji => ({
@@ -1458,7 +1466,9 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     widgetPromenade,
     emojiGameStats,
     customEmojiNames,
+    freeBlendsUsed,
     setCustomEmojiName,
+    incrementFreeBlendsUsed,
     updateFlappyEmojiStats,
     updateSlicerEmojiStats,
     updateSlicerGameStats,
@@ -1620,6 +1630,8 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     updateFlappyEmojiStats,
     updateSlicerEmojiStats,
     updateSlicerGameStats,
+    freeBlendsUsed,
+    incrementFreeBlendsUsed,
   ]);
 
   useEffect(() => {
@@ -1809,6 +1821,11 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
             } else if (shouldResetSession) {
               setEmojiGameStats({});
             }
+            if (typeof parsed.freeBlendsUsed === 'number') {
+              setFreeBlendsUsed(parsed.freeBlendsUsed);
+            } else if (shouldResetSession) {
+              setFreeBlendsUsed(0);
+            }
           } catch {
             // ignore malformed stored data
           }
@@ -1900,6 +1917,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       rssFeeds,
       widgetPromenade,
       emojiGameStats,
+      freeBlendsUsed,
     };
 
     AsyncStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(payload)).catch(() => {
@@ -1925,6 +1943,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     rssItems,
     widgetPromenade,
     emojiGameStats,
+    freeBlendsUsed,
   ]);
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

@@ -10,6 +10,7 @@ import type {
   HomeEmojiTheme,
   UpgradeDefinition,
 } from '@/context/GameContext';
+import { formatClickValue } from '@/constants/emojiCatalog';
 
 const CATEGORY_LABELS: Record<EmojiDefinition['category'], string> = {
   plants: 'Plants & Foliage',
@@ -386,6 +387,12 @@ export function UpgradeSection({
                 <View style={styles.emojiStatsDetails}>
                   <Text style={styles.emojiStatsDescription}>{formatEmojiDescription(selectedEmojiDetails)}</Text>
                   
+                  {/* Purchase Cost */}
+                  <View style={styles.emojiCostContainer}>
+                    <Text style={styles.emojiCostLabel}>💰 Purchase Cost:</Text>
+                    <Text style={styles.emojiCostValue}>{formatClickValue(selectedEmojiDetails.cost)}</Text>
+                  </View>
+                  
                   {/* Game Statistics */}
                   {(() => {
                     const emojiId = selectedEmojiDetails.id;
@@ -403,10 +410,13 @@ export function UpgradeSection({
                       slicerGamesPlayed: (statsById.slicerGamesPlayed || 0) + (statsByString.slicerGamesPlayed || 0),
                     };
                     
-                    if (stats.flappyBestScore > 0 || stats.slicerTimesSliced > 0) {
+                    const hasFlappyStats = stats.flappyBestScore > 0;
+                    const hasSlicerStats = stats.slicerTimesSliced > 0;
+                    
+                    if (hasFlappyStats || hasSlicerStats) {
                       return (
                         <View style={styles.gameStatsContainer}>
-                          {stats.flappyBestScore > 0 && (
+                          {hasFlappyStats && (
                             <View style={styles.gameStatRow}>
                               <Text style={styles.gameStatIcon}>🎮</Text>
                               <Text style={styles.gameStatText}>
@@ -414,7 +424,7 @@ export function UpgradeSection({
                               </Text>
                             </View>
                           )}
-                          {stats.slicerTimesSliced > 0 && (
+                          {hasSlicerStats && (
                             <View style={styles.gameStatRow}>
                               <Text style={styles.gameStatIcon}>🔪</Text>
                               <Text style={styles.gameStatText}>
@@ -1349,6 +1359,28 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     fontSize: 14,
     color: '#374151',
     lineHeight: 20,
+  },
+  emojiCostContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+  },
+  emojiCostLabel: {
+    fontSize: 13,
+    color: '#78350f',
+    fontWeight: '600',
+  },
+  emojiCostValue: {
+    fontSize: 15,
+    color: '#92400e',
+    fontWeight: '700',
   },
   emojiStatsTags: {
     flexDirection: 'row',
