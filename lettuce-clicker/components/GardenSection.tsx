@@ -394,6 +394,7 @@ export function GardenSection({
   const [isLoadingCustomBlend, setIsLoadingCustomBlend] = useState(false);
   const [isEditingBlendName, setIsEditingBlendName] = useState(false);
   const [editedBlendName, setEditedBlendName] = useState('');
+  const suppressAutoBlendRef = useRef(false);
   
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
   const [penButtonLayout, setPenButtonLayout] = useState<LayoutRectangle | null>(null);
@@ -663,7 +664,12 @@ export function GardenSection({
 
   // Auto-blend when both emojis are present
   useEffect(() => {
+    if (suppressAutoBlendRef.current) {
+      console.log('🚫 Auto-blend suppressed');
+      return;
+    }
     if (customEmojiLeft && customEmojiRight && customEmojiLeft.trim().length > 0 && customEmojiRight.trim().length > 0) {
+      console.log('🎨 Auto-blend triggered for:', customEmojiLeft, customEmojiRight);
       // Call blend directly without including it in dependencies to avoid infinite loops
       const blendEmojis = async () => {
         setCustomBlendError(null);
@@ -698,61 +704,31 @@ export function GardenSection({
     
     if (candidates.length < 2) return;
 
-    setIsLoadingCustomBlend(true);
-    setCustomBlendError(null);
-
-    try {
-      let attempts = 0;
-      const maxAttempts = 15;
+    // Keep trying until we find a compatible pair
+    let attempts = 0;
+    const maxAttempts = 20;
+    
+    while (attempts < maxAttempts) {
+      // Pick a random base emoji
+      const left = candidates[Math.floor(Math.random() * candidates.length)].emoji;
       
-      while (attempts < maxAttempts) {
-        // Pick a random base emoji
-        const left = candidates[Math.floor(Math.random() * candidates.length)].emoji;
-        
+      try {
         // Find a compatible partner
         const right = await getRandomCompatibleEmoji(left);
         
         if (right) {
-          // Test if this combination actually works before setting it
-          try {
-            const testResult = await fetchEmojiKitchenMash(left, right);
-            
-            if (testResult && testResult.imageUrl) {
-              // Calculate the estimated cost for this blend
-              const compositeEmoji = `${left}${right}`;
-              const estimatedCost = computeKitchenEmojiCost(compositeEmoji);
-              
-              // If in low-to-high mode, only accept blends user can afford
-              if (priceSortOrder === 'asc') {
-                if (estimatedCost <= harvest) {
-                  setCustomEmojiLeft(left);
-                  setCustomEmojiRight(right);
-                  break;
-                }
-              } else {
-                // In high-to-low mode, accept any blend
-                setCustomEmojiLeft(left);
-                setCustomEmojiRight(right);
-                break;
-              }
-            }
-          } catch (testError) {
-            // This combination doesn't work, try again
-          }
+          // Found a compatible pair! Set the emojis and let auto-blend handle the rest
+          setCustomEmojiLeft(left);
+          setCustomEmojiRight(right);
+          return;
         }
-        
-        attempts++;
+      } catch (error) {
+        // This emoji didn't work, try another
       }
       
-      // Silently stop loading if we couldn't find a blend - don't show error
-      if (attempts >= maxAttempts) {
-        setIsLoadingCustomBlend(false);
-      }
-    } catch (error) {
-      // Silently handle error - don't show error message
-      setIsLoadingCustomBlend(false);
+      attempts++;
     }
-  }, [emojiCatalog, computeKitchenEmojiCost, priceSortOrder, harvest]);
+  }, [emojiCatalog]);
 
   const handlePurchaseCustomBlend = useCallback(async () => {
     if (!customBlendPreview) {
@@ -1667,7 +1643,7 @@ export function GardenSection({
         onInventorySelect={handleInventorySelect}
         onInventoryLongPress={handleInventoryLongPress}
         isInWallet={isInWallet}
-        walletColor={INVENTORY_COLORS[inventoryEmoji]?.color || '#f59e0b'}
+        walletColor={INVENTORY_COLORS[inventoryEmoji as keyof typeof INVENTORY_COLORS]?.color || '#f59e0b'}
         onLayout={handleInventoryTileLayout}
         beginDrag={beginInventoryDrag}
         updateDrag={updateInventoryDrag}
@@ -2731,12 +2707,15 @@ export function GardenSection({
                                   
                                   // If not found, register it now
                                   if (!definition && shopPreview.emoji) {
-                                    definition = registerCustomEmoji(shopPreview.emoji);
+                                    const registered = registerCustomEmoji(shopPreview.emoji);
+                                    if (registered) {
+                                      definition = registered;
+                                    }
                                   }
                                   
                                   // Purchase with the definition
                                   const success = definition 
-                                    ? purchaseEmoji(definition.id, definition)
+                                    ? purchaseEmoji(definition.id)
                                     : purchaseEmoji(shopPreview.id);
                                     
                                   if (success) {
