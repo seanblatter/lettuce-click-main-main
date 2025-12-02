@@ -71,6 +71,22 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
     return emojis;
   }, [emojiInventory, emojiCatalog, customEmojiNames]);
 
+  // Separate emoji lists for each game
+  const flappyEmojis = useMemo(() => {
+    // Flappy Lettuce gets ALL owned emojis including custom ones
+    return ownedEmojiObjects;
+  }, [ownedEmojiObjects]);
+
+  const hopEmojis = useMemo(() => {
+    if (hasPremiumUpgrade) {
+      // Premium users get ALL owned emojis including custom ones
+      return ownedEmojiObjects;
+    } else {
+      // Free users get only non-custom emojis in Lettuce Hop
+      return ownedEmojiObjects.filter((e: EmojiItem) => !e.imageUrl);
+    }
+  }, [ownedEmojiObjects, hasPremiumUpgrade]);
+
   // Create a mapping from emoji string to custom name
   const emojiStringToName = useMemo(() => {
     const mapping: Record<string, string> = {};
@@ -244,7 +260,7 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
         ) : currentScreen === 'flappy-lettuce' ? (
           <FlappyLettuceGame
             onBack={handleBackToHub}
-            emojiInventory={ownedEmojiObjects}
+            emojiInventory={flappyEmojis}
             customEmojiNames={emojiStringToName}
             selectedEmoji={selectedEmoji}
             onEmojiChange={setSelectedEmoji}
@@ -258,7 +274,7 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
         ) : currentScreen === 'lettuce-hop' ? (
           <LettuceHopGame
             onBack={handleBackToHub}
-            emojiInventory={ownedEmojiObjects}
+            emojiInventory={hopEmojis}
             customEmojiNames={emojiStringToName}
             selectedEmoji={selectedEmoji}
             onEmojiChange={setSelectedEmoji}

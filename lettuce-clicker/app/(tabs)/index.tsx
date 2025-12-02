@@ -164,6 +164,7 @@ export default function HomeScreen() {
     homeEmojiTheme,
     setHomeEmojiTheme,
     emojiThemes,
+    emojiCatalog,
     emojiInventory,
     ownedThemes,
     profileName,
@@ -1847,7 +1848,7 @@ export default function HomeScreen() {
         visible={showGamesHub}
         onRequestClose={handleCloseGamesHub}
         emojiInventory={emojiInventory}
-        emojiCatalog={gardenEmojiCatalog}
+        emojiCatalog={emojiCatalog}
         customEmojiNames={customEmojiNames}
         hasPremiumUpgrade={hasPremiumUpgrade}
         onPurchasePremium={purchasePremiumUpgrade}
@@ -2882,7 +2883,8 @@ const styles = StyleSheet.create({
   bonusContainer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 24,
     paddingHorizontal: 32,
     gap: 18,
   },
