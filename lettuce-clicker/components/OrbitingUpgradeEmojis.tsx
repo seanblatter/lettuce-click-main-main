@@ -195,16 +195,6 @@ function useLoopingValue(duration: number, delay = 0, easing: (value: number) =>
 }
 
 function CircleOrbit({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const rotation = useLoopingValue(12000);
-  const rotate = useMemo(
-    () =>
-      rotation.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0rad', `${FULL_ROTATION_RADIANS}rad`],
-      }),
-    [rotation]
-  );
-
   const positioned = useMemo(() => {
     const limit = emojis.slice(0, 300);
     return limit.map((item, index) => {
@@ -215,7 +205,7 @@ function CircleOrbit({ emojis, radius, emojiStyle }: BasePatternProps) {
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
-      <Animated.View style={[styles.container, { transform: [{ rotate }] }]}>{
+      <View pointerEvents="none" style={styles.container}>{
         positioned.map(({ id, emoji, angle, distance }) => (
           <View
             key={id}
@@ -233,7 +223,7 @@ function CircleOrbit({ emojis, radius, emojiStyle }: BasePatternProps) {
             <Text style={[styles.emoji, emojiStyle]}>{emoji}</Text>
           </View>
         ))
-      }</Animated.View>
+      }</View>
     </View>
   );
 }

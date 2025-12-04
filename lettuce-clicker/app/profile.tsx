@@ -38,6 +38,16 @@ const BACKGROUND_WHEEL_DIAMETER = 200;
 const BACKGROUND_WHEEL_RADIUS = 80;
 const BACKGROUND_WHEEL_SWATCH_SIZE = 44;
 
+// Helper function to determine if a color is dark
+const isDarkColor = (hexColor: string): boolean => {
+  const hex = hexColor.replace('#', '');
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance < 0.5;
+};
+
 type ProfileContentProps = {
   mode?: 'screen' | 'modal';
   onRequestClose?: () => void;
@@ -356,7 +366,8 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
     handleClose();
   }, [handleClose, persistProfile]);
 
-  const styles = useMemo(() => createResponsiveStyles(isLandscape), [isLandscape]);
+  const isDarkTheme = useMemo(() => isDarkColor(gardenBackgroundColor), [gardenBackgroundColor]);
+  const styles = useMemo(() => createResponsiveStyles(isLandscape, isDarkTheme), [isLandscape, isDarkTheme]);
   
   const isModal = mode === 'modal';
   const closeAccessibilityLabel = isModal ? 'Close profile editor' : 'Go back';
@@ -718,10 +729,10 @@ export default function ProfileScreen() {
   return <ProfileContent mode="screen" onRequestClose={() => router.back()} />;
 }
 
-const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
+const createResponsiveStyles = (isLandscape: boolean, isDarkTheme: boolean = false) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f2f9f2',
+    backgroundColor: isDarkTheme ? '#1a1d23' : '#f2f9f2',
   },
   content: {
     paddingHorizontal: 24,
@@ -747,12 +758,12 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: 'rgba(22, 101, 52, 0.14)',
+    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.1)' : 'rgba(22, 101, 52, 0.14)',
   },
   modalBackLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#14532d',
+    color: isDarkTheme ? '#86efac' : '#14532d',
   },
   headerCard: {
     backgroundColor: '#22543d',
@@ -921,25 +932,29 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     lineHeight: 20,
   },
   upgradeCard: {
-    backgroundColor: '#f0fff4',
+    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.08)' : '#f0fff4',
     borderRadius: 20,
     padding: 20,
     gap: 16,
-    shadowColor: '#0f766e',
-    shadowOpacity: 0.1,
+    shadowColor: isDarkTheme ? '#000000' : '#0f766e',
+    shadowOpacity: isDarkTheme ? 0.3 : 0.1,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
+    ...(isDarkTheme && {
+      borderWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.12)',
+    }),
   },
   upgradeTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#14532d',
+    color: isDarkTheme ? '#f0fdf4' : '#14532d',
   },
   upgradeCopy: {
     fontSize: 14,
     lineHeight: 20,
-    color: '#1f2937',
+    color: isDarkTheme ? 'rgba(255, 255, 255, 0.85)' : '#1f2937',
   },
   accentRow: {
     flexDirection: 'row',
@@ -974,11 +989,11 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
   backgroundTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#14532d',
+    color: isDarkTheme ? '#dcfce7' : '#14532d',
   },
   backgroundCopy: {
     fontSize: 13,
-    color: '#22543d',
+    color: isDarkTheme ? 'rgba(255, 255, 255, 0.75)' : '#22543d',
     lineHeight: 18,
   },
   backgroundWheelContainer: {
@@ -992,11 +1007,11 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.05)' : '#ffffff',
     borderWidth: 1,
-    borderColor: '#bbf7d0',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.08,
+    borderColor: isDarkTheme ? 'rgba(255, 255, 255, 0.15)' : '#bbf7d0',
+    shadowColor: isDarkTheme ? '#000000' : '#0f172a',
+    shadowOpacity: isDarkTheme ? 0.4 : 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
     elevation: 3,
@@ -1007,12 +1022,12 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     height: BACKGROUND_WHEEL_SWATCH_SIZE,
     borderRadius: BACKGROUND_WHEEL_SWATCH_SIZE / 2,
     borderWidth: 2,
-    borderColor: 'rgba(15, 83, 45, 0.2)',
+    borderColor: isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(15, 83, 45, 0.2)',
   },
   backgroundWheelSwatchActive: {
-    borderColor: '#1f6f4a',
-    shadowColor: '#0f5132',
-    shadowOpacity: 0.25,
+    borderColor: isDarkTheme ? '#10b981' : '#1f6f4a',
+    shadowColor: isDarkTheme ? '#10b981' : '#0f5132',
+    shadowOpacity: isDarkTheme ? 0.5 : 0.25,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
@@ -1022,7 +1037,7 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     height: 64,
     borderRadius: 32,
     borderWidth: 2,
-    borderColor: '#bbf7d0',
+    borderColor: isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : '#bbf7d0',
   },
   backgroundResetButton: {
     paddingHorizontal: 16,
@@ -1065,18 +1080,18 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.1)' : '#ffffff',
     borderWidth: 1,
-    borderColor: 'rgba(15, 118, 110, 0.25)',
-    shadowColor: '#0f766e',
-    shadowOpacity: 0.18,
+    borderColor: isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(15, 118, 110, 0.25)',
+    shadowColor: isDarkTheme ? '#000000' : '#0f766e',
+    shadowOpacity: isDarkTheme ? 0.3 : 0.18,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
   },
   emojiChoiceInnerActive: {
-    backgroundColor: '#ecfdf3',
-    borderColor: 'rgba(22, 101, 52, 0.45)',
+    backgroundColor: isDarkTheme ? 'rgba(34, 197, 94, 0.15)' : '#ecfdf3',
+    borderColor: isDarkTheme ? 'rgba(34, 197, 94, 0.4)' : 'rgba(22, 101, 52, 0.45)',
   },
   emojiChoiceGlyph: {
     fontSize: 30,
@@ -1086,24 +1101,24 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
   },
   emojiEmptyText: {
     fontSize: 13,
-    color: '#2d3748',
+    color: isDarkTheme ? 'rgba(255, 255, 255, 0.6)' : '#2d3748',
   },
   emojiInputContainer: {
-    backgroundColor: '#ffffff',
+    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.08)' : '#ffffff',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderColor: isDarkTheme ? 'rgba(255, 255, 255, 0.15)' : '#bbf7d0',
   },
   emojiInputField: {
     width: '100%',
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#22543d',
+    color: isDarkTheme ? '#ffffff' : '#22543d',
   },
   emojiNote: {
     fontSize: 12,
-    color: '#1f6f4a',
+    color: isDarkTheme ? 'rgba(255, 255, 255, 0.6)' : '#1f6f4a',
     lineHeight: 18,
   },
   upgradeButton: {
@@ -1135,7 +1150,7 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: isDarkTheme ? 'rgba(0, 0, 0, 0.85)' : 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
   },
   modalBackdrop: {
@@ -1151,25 +1166,31 @@ const createResponsiveStyles = (isLandscape: boolean) => StyleSheet.create({
     fontWeight: '600',
   },
   modalCard: {
-    backgroundColor: '#f0fff4',
+    backgroundColor: isDarkTheme ? 'rgba(26, 29, 35, 0.98)' : '#f0fff4',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
     paddingTop: 16,
-    shadowColor: '#0f2e20',
-    shadowOpacity: 0.18,
+    shadowColor: isDarkTheme ? '#000000' : '#0f2e20',
+    shadowOpacity: isDarkTheme ? 0.5 : 0.18,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: -2 },
     height: '90%',
     alignSelf: 'center',
     width: '100%',
+    ...(isDarkTheme && {
+      borderTopWidth: 1,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: 'rgba(255, 255, 255, 0.1)',
+    }),
   },
   modalHandle: {
     alignSelf: 'center',
     width: 48,
     height: 5,
     borderRadius: 999,
-    backgroundColor: '#bbf7d0',
+    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : '#bbf7d0',
     marginBottom: 16,
   },
   modalScrollView: {

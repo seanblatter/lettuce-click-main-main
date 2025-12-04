@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
-  Easing,
   Modal,
   Pressable,
   ScrollView,
@@ -17,7 +16,7 @@ import {
   AppState,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedProps, runOnJS, FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedProps, runOnJS, FadeInDown, FadeOutUp, withTiming, withRepeat, withSequence, Easing } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -378,6 +377,28 @@ export default function HomeScreen() {
       transform: [
         { rotate: `${djRotation.value}deg` },
         { scale: isRotating ? volumeScale * 1.05 : volumeScale }
+      ],
+    };
+  });
+
+  // Gentle floating animation - independent of user gestures
+  const floatingOffset = useSharedValue(0);
+  
+  useEffect(() => {
+    floatingOffset.value = withRepeat(
+      withSequence(
+        withTiming(8, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
+        withTiming(-8, { duration: 2000, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      false
+    );
+  }, []);
+
+  const floatingStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { translateY: floatingOffset.value }
       ],
     };
   });
@@ -1182,7 +1203,7 @@ export default function HomeScreen() {
                   source={require('@/assets/images/clicker-icon.png')}
                   style={[
                     styles.lettuceImage,
-                    isAmbientPlaying && djWheelStyle
+                    floatingStyle
                   ]}
                   resizeMode="contain"
                 />
