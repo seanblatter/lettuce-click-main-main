@@ -1231,13 +1231,8 @@ function LaserSweep({ emojis, radius, emojiStyle }: BasePatternProps) {
 }
 
 function AuroraVeil({ emojis, radius, emojiStyle }: BasePatternProps) {
-  const columns = useMemo(() => Math.max(2, Math.min(5, Math.ceil(emojis.length / 4))), [emojis.length]);
-  const columnWidth = radius * 2.4;
-  const segmentHeight = radius * 0.45;
+  const columns = useMemo(() => Math.max(3, Math.min(6, Math.ceil(emojis.length / 3))), [emojis.length]);
   const limit = useMemo(() => emojis.slice(0, 300), [emojis]);
-
-  const progress = useLoopingValue(AURORA_DURATION, 0, Easing.inOut(Easing.sin));
-  const ripple = useLoopingValue(AURORA_DURATION * 1.5, 0, Easing.inOut(Easing.cubic));
 
   return (
     <View pointerEvents="none" style={styles.wrapper}>
@@ -1247,46 +1242,64 @@ function AuroraVeil({ emojis, radius, emojiStyle }: BasePatternProps) {
           return null;
         }
 
-        const baseX = -columnWidth / 2 + (columnWidth / Math.max(1, columns - 1)) * columnIndex;
+        // Create waterfall spread from center
+        const centerOffset = (columnIndex - (columns - 1) / 2) / columns;
+        const baseX = centerOffset * radius * 1.8;
+        
+        // Staggered animation for waterfall cascading effect
         const columnPhase = randomForKey(`aurora-${columnIndex}`, columnIndex + 12);
-        const shifted = Animated.modulo(Animated.add(progress, columnPhase), 1);
-        const translateY = shifted.interpolate({
-          inputRange: [0, 0.5, 1],
-          outputRange: [-AURORA_SHIFT, AURORA_SHIFT, -AURORA_SHIFT],
-        });
-        
-        // Add horizontal ripple effect
-        const ripplePhase = columnPhase + 0.2;
-        const rippleShifted = Animated.modulo(Animated.add(ripple, ripplePhase), 1);
-        const translateX = rippleShifted.interpolate({
-          inputRange: [0, 0.25, 0.5, 0.75, 1],
-          outputRange: [0, 15, 0, -15, 0],
-        });
-        
-        const skew = columnIndex % 2 === 0 ? '-6deg' : '6deg';
+        const fallDelay = (Math.abs(centerOffset) * 0.3);
 
-        return (
-          <Animated.View
-            key={`aurora-column-${columnIndex}`}
-            style={[
-              styles.columnContainer,
-              {
-                transform: [
-                  { translateX: Animated.add(baseX, translateX) },
-                  { translateY },
-                ],
-              },
-            ]}
-          >
-            <View style={[styles.columnInner, { transform: [{ skewY: skew }] }]}> 
-              {columnItems.map((emoji, rowIndex) => (
-                <View key={emoji.id} style={[styles.columnEmoji, { top: rowIndex * segmentHeight }]}> 
-                  <Text style={[styles.emoji, emojiStyle, styles.emojiAurora]}>{emoji.emoji}</Text>
-                </View>
-              ))}
-            </View>
-          </Animated.View>
-        );
+        return columnItems.map((emoji, itemIndex) => {
+          const progress = useLoopingValue(AURORA_DURATION + itemIndex * 200, fallDelay * 1000, Easing.linear);
+          
+          // Waterfall falling motion - start from 60% up the screen (around clicker icon area)
+          const translateY = progress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [-WINDOW_HEIGHT * 0.1, WINDOW_HEIGHT * 1.2],
+          });
+          
+          // Gentle side-to-side sway as emojis fall like water
+          const swayProgress = useLoopingValue(AURORA_DURATION * 0.6 + itemIndex * 150, 0, Easing.inOut(Easing.sin));
+          const translateX = swayProgress.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [-12, 12, -12],
+          });
+          
+          // Fade in at top, fade out at bottom for waterfall effect
+          const opacity = progress.interpolate({
+            inputRange: [0, 0.15, 0.85, 1],
+            outputRange: [0, 1, 1, 0],
+          });
+          
+          // Slight scale variation for depth
+          const scale = swayProgress.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [0.85, 1.0, 0.85],
+          });
+
+          return (
+            <Animated.View
+              key={`waterfall-${columnIndex}-${emoji.id}`}
+              style={[
+                {
+                  position: 'absolute',
+                  left: '50%',
+                },
+                {
+                  transform: [
+                    { translateX: Animated.add(baseX, translateX) },
+                    { translateY },
+                    { scale },
+                  ],
+                  opacity,
+                },
+              ]}
+            >
+              <Text style={[styles.emoji, emojiStyle, styles.emojiAurora]}>{emoji.emoji}</Text>
+            </Animated.View>
+          );
+        });
       })}
     </View>
   );

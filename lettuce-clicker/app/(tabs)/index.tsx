@@ -286,7 +286,7 @@ export default function HomeScreen() {
 
 
 
-  // Harvest ledger swipe state
+  // Harvest card swipe state
   const [showMusicContainer, setShowMusicContainer] = useState(false);
   const [isGestureActive, setIsGestureActive] = useState(false);
   const [showTemperatureUnitModal, setShowTemperatureUnitModal] = useState(false);
@@ -334,7 +334,7 @@ export default function HomeScreen() {
       }
     });
 
-  // Swipe gesture for switching between harvest ledger and music container
+  // Swipe gesture for switching between harvest card and music container
   const ledgerSwipeGesture = Gesture.Pan()
     .onBegin(() => {
       runOnJS(setIsGestureActive)(true);
@@ -352,7 +352,7 @@ export default function HomeScreen() {
           // Swipe left - show music container 
           runOnJS(setShowMusicContainer)(true);
         } else {
-          // Swipe right - show harvest ledger
+          // Swipe right - show harvest card
           runOnJS(setShowMusicContainer)(false);
         }
       }
@@ -387,8 +387,9 @@ export default function HomeScreen() {
   useEffect(() => {
     floatingOffset.value = withRepeat(
       withSequence(
-        withTiming(8, { duration: 2000, easing: Easing.inOut(Easing.sin) }),
-        withTiming(-8, { duration: 2000, easing: Easing.inOut(Easing.sin) })
+        withTiming(12, { duration: 3000, easing: Easing.bezier(0.4, 0.0, 0.6, 1.0) }),
+        withTiming(-12, { duration: 3000, easing: Easing.bezier(0.4, 0.0, 0.6, 1.0) }),
+        withTiming(0, { duration: 3000, easing: Easing.bezier(0.4, 0.0, 0.6, 1.0) })
       ),
       -1,
       false
@@ -1222,7 +1223,7 @@ export default function HomeScreen() {
                     isLandscape && styles.statsCardLandscape,
                   ]}
                   accessibilityRole="text"
-                  accessibilityLabel="Harvest Ledger"
+                  accessibilityLabel="Harvest Card"
                 >
                   <View
                     pointerEvents="none"
@@ -1233,7 +1234,7 @@ export default function HomeScreen() {
                     style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
                   />
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>Harvest Ledger</Text>
+                    <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>Harvest Card</Text>
                   </View>
                   <View style={styles.statRow}>
                     <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Auto Clicks</Text>
@@ -2280,7 +2281,7 @@ const styles = StyleSheet.create({
   lettuceWrapperLandscape: {
     width: 200,
     height: 200,
-    marginRight: 30, // Further reduced to give more space to harvest ledger
+    marginRight: 30, // Further reduced to give more space to harvest card
     marginLeft: 40,  // Slightly increased to center better
     alignSelf: 'flex-start',
   },
@@ -2449,7 +2450,7 @@ const styles = StyleSheet.create({
   statsSection: {
     flex: 1,
     marginTop: 15, // Slightly reduced to raise it up
-    alignItems: 'center', // Center the harvest ledger/dream capsule container
+    alignItems: 'center', // Center the harvest card/dream capsule container
   },
   statsSectionLandscape: {
     flex: 0.7, // Increase flex to give it more space and pull it inward
@@ -3537,7 +3538,7 @@ const styles = StyleSheet.create({
   // Temperature settings container
   temperatureSettingsContainer: {
     position: 'absolute',
-    top: '25%', // Moved higher to avoid collision with harvest ledger
+    top: '25%', // Moved higher to avoid collision with harvest card
     left: '50%',
     transform: [{ translateX: -60 }, { translateY: -40 }],
     backgroundColor: 'rgba(255, 255, 255, 0.95)', // Slightly more opaque
