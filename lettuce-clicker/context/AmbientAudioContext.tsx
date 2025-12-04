@@ -4,19 +4,40 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import { useHardwareVolumeSync } from './VolumeSync';
+import { ALARM_CHIME_DATA_URI } from '@/assets/audio/alarmChime';
 
 import { MUSIC_AUDIO_MAP, MUSIC_OPTIONS, type MusicOption } from '@/constants/music';
+
+type AlarmPeriod = 'AM' | 'PM';
+type TimerAction = 'stop' | 'alarm';
+
+export type SleepCircleState =
+  | { mode: 'timer'; duration: number; targetTimestamp: number; startedAt: number; action: TimerAction }
+  | {
+      mode: 'alarm';
+      fireTimestamp: number;
+      hour: number;
+      minute: number;
+      period: AlarmPeriod;
+      scheduledAt: number;
+    }
+  | null;
 
 type AmbientAudioContextValue = {
   selectedTrackId: MusicOption['id'];
   isPlaying: boolean;
   error: Error | null;
   volume: number;
+  sleepCircle: SleepCircleState;
+  isAlarmRinging: boolean;
   selectTrack: (trackId: MusicOption['id'], options?: { autoPlay?: boolean }) => void;
   togglePlayback: () => void;
   play: () => void;
   pause: () => void;
   setVolume: (volume: number) => void;
+  setSleepCircle: (state: SleepCircleState) => void;
+  triggerAlarm: () => void;
+  dismissAlarm: () => void;
 };
 
 const AmbientAudioContext = createContext<AmbientAudioContextValue | undefined>(undefined);
@@ -29,9 +50,12 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
   const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
   const [error, setError] = useState<Error | null>(null);
   const [volume, setVolumeState] = useState<number>(0.7); // Default volume 70%
+  const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
+  const [isAlarmRinging, setIsAlarmRinging] = useState(false);
 
   const player = useAudioPlayer(MUSIC_AUDIO_MAP[selectedTrackId]);
   const status = useAudioPlayerStatus(player);
+  const alarmPlayer = useAudioPlayer(ALARM_CHIME_DATA_URI);
 
   const isPlaying = status.playing;
   const shouldResumeRef = useRef(false);
@@ -207,19 +231,46 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
     }
   }, [isPlaying, play, pause]);
 
+  const dismissAlarm = useCallback(() => {
+    setIsAlarmRinging(false);
+    setSleepCircle(null); // Clear the sleep circle so alarm doesn't re-trigger
+    try {
+      alarmPlayer.pause();
+      alarmPlayer.seekTo(0);
+    } catch (error) {
+      console.warn('Failed to stop alarm', error);
+    }
+  }, [alarmPlayer]);
+
+  const triggerAlarm = useCallback(() => {
+    setIsAlarmRinging(true);
+    try {
+      alarmPlayer.seekTo(0);
+      alarmPlayer.loop = true;
+      alarmPlayer.play();
+    } catch (error) {
+      console.warn('Failed to play alarm', error);
+    }
+  }, [alarmPlayer]);
+
   const value = useMemo(
     () => ({
       selectedTrackId,
       isPlaying,
       error,
       volume,
+      sleepCircle,
+      isAlarmRinging,
       selectTrack,
       togglePlayback,
       play,
       pause,
       setVolume,
+      setSleepCircle,
+      triggerAlarm,
+      dismissAlarm,
     }),
-    [error, isPlaying, pause, play, selectTrack, selectedTrackId, togglePlayback, volume, setVolume]
+    [error, isPlaying, pause, play, selectTrack, selectedTrackId, togglePlayback, volume, setVolume, sleepCircle, isAlarmRinging, triggerAlarm, dismissAlarm]
   );
 
   return <AmbientAudioContext.Provider value={value}>{children}</AmbientAudioContext.Provider>;

@@ -14,11 +14,13 @@ import {
   Image,
   useWindowDimensions,
   useColorScheme,
+  AppState,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedProps, runOnJS, FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 
 import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
 import { MusicContent } from '@/app/music';
@@ -27,6 +29,7 @@ import { useGame } from '@/context/GameContext';
 import { gardenEmojiCatalog } from '@/constants/emojiCatalog';
 import type { EmojiDefinition, HomeEmojiTheme } from '@/context/GameContext';
 import { useAmbientAudio } from '@/context/AmbientAudioContext';
+import { MUSIC_OPTIONS } from '@/constants/music';
 import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
 import { TemperatureUnitModal } from '@/components/TemperatureUnitModal';
 import { RSSWidget } from '@/components/RSSWidget';
@@ -254,11 +257,11 @@ export default function HomeScreen() {
   const [dailyCountdown, setDailyCountdown] = useState<string | null>(null);
   const [hasDoubledPassiveHarvest, setHasDoubledPassiveHarvest] = useState(false);
   const [isWatchingResumeOffer, setIsWatchingResumeOffer] = useState(false);
-  const [ledgerToneIndex, setLedgerToneIndex] = useState(0);
+  const [sleepNow, setSleepNow] = useState(Date.now());
   const insets = useSafeAreaInsets();
   const dimensions = useWindowDimensions();
   const flipAnimation = useRef(new Animated.Value(0)).current;
-  const { isPlaying: isAmbientPlaying, volume, setVolume, togglePlayback, play, pause } = useAmbientAudio();
+  const { isPlaying: isAmbientPlaying, volume, setVolume, togglePlayback, play, pause, sleepCircle, selectedTrackId, selectTrack, isAlarmRinging, triggerAlarm, dismissAlarm } = useAmbientAudio();
   const audioPulsePrimary = useRef(new Animated.Value(0)).current;
   const audioPulseSecondary = useRef(new Animated.Value(0)).current;
   const quickActionWiggles = useRef({
@@ -404,6 +407,119 @@ export default function HomeScreen() {
       </Text>
     );
   };
+
+  // Update sleep timer clock every second
+  useEffect(() => {
+    if (!sleepCircle) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setSleepNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [sleepCircle]);
+
+  // Alarm polling check - ensures alarm triggers even without user interaction
+  useEffect(() => {
+    if (!sleepCircle) {
+      return;
+    }
+
+    const checkInterval = setInterval(() => {
+      const now = Date.now();
+      const target = sleepCircle.mode === 'timer' ? sleepCircle.targetTimestamp : sleepCircle.fireTimestamp;
+      
+      // If we've passed the target time and alarm isn't already ringing, trigger it
+      if (now >= target && !isAlarmRinging) {
+        triggerAlarm();
+      }
+    }, 1000); // Check every second
+
+    return () => {
+      clearInterval(checkInterval);
+    };
+  }, [sleepCircle, triggerAlarm, isAlarmRinging]);
+
+  // Check for missed alarms when app becomes active (comes from background)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && sleepCircle) {
+        const now = Date.now();
+        const target = sleepCircle.mode === 'timer' ? sleepCircle.targetTimestamp : sleepCircle.fireTimestamp;
+        
+        // If we missed the alarm while backgrounded and it's not already ringing, trigger it now
+        if (now >= target && !isAlarmRinging) {
+          triggerAlarm();
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [sleepCircle, triggerAlarm, isAlarmRinging]);
+
+  // Calculate sleep timer progress
+  const sleepProgress = useMemo(() => {
+    if (!sleepCircle) {
+      return null;
+    }
+
+    if (sleepCircle.mode === 'timer') {
+      const totalDurationMs = sleepCircle.duration * 60000;
+
+      if (totalDurationMs <= 0) {
+        return 1;
+      }
+
+      const remainingMs = sleepCircle.targetTimestamp - sleepNow;
+      const clampedRemaining = Math.min(Math.max(remainingMs, 0), totalDurationMs);
+      const elapsed = totalDurationMs - clampedRemaining;
+      return Math.min(Math.max(elapsed / totalDurationMs, 0), 1);
+    }
+
+    // For alarm mode
+    const totalAlarmMs = sleepCircle.fireTimestamp - sleepCircle.scheduledAt;
+
+    if (totalAlarmMs <= 0) {
+      return 1;
+    }
+
+    const elapsed = Math.min(
+      Math.max(sleepNow - sleepCircle.scheduledAt, 0),
+      totalAlarmMs
+    );
+    return Math.min(Math.max(elapsed / totalAlarmMs, 0), 1);
+  }, [sleepCircle, sleepNow]);
+
+  // Just toggle playback without setting timer (timer is set in Music Lounge)
+  const handleTogglePlaybackWithTimer = useCallback(() => {
+    togglePlayback();
+  }, [togglePlayback]);
+
+  const handleSelectPrevious = useCallback(() => {
+    const currentIndex = MUSIC_OPTIONS.findIndex((option) => option.id === selectedTrackId);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const previousIndex = (safeIndex - 1 + MUSIC_OPTIONS.length) % MUSIC_OPTIONS.length;
+    const previousTrack = MUSIC_OPTIONS[previousIndex];
+
+    if (previousTrack && previousTrack.id !== selectedTrackId) {
+      selectTrack(previousTrack.id, { autoPlay: isAmbientPlaying });
+    }
+  }, [isAmbientPlaying, selectTrack, selectedTrackId]);
+
+  const handleSelectNext = useCallback(() => {
+    const currentIndex = MUSIC_OPTIONS.findIndex((option) => option.id === selectedTrackId);
+    const safeIndex = currentIndex >= 0 ? currentIndex : 0;
+    const nextIndex = (safeIndex + 1) % MUSIC_OPTIONS.length;
+    const nextTrack = MUSIC_OPTIONS[nextIndex];
+
+    if (nextTrack && nextTrack.id !== selectedTrackId) {
+      selectTrack(nextTrack.id, { autoPlay: isAmbientPlaying });
+    }
+  }, [isAmbientPlaying, selectTrack, selectedTrackId]);
   
   const isLandscape = useMemo(() => dimensions.width > dimensions.height, [dimensions]);
   const headerPaddingTop = useMemo(() => Math.max(insets.top - 6, 0) + (isLandscape ? 4 : 8), [insets.top, isLandscape]);
@@ -440,8 +556,12 @@ export default function HomeScreen() {
     [audioPulsePrimary]
   );
   const ledgerTheme = useMemo(
-    () => LEDGER_THEMES[ledgerToneIndex % LEDGER_THEMES.length],
-    [ledgerToneIndex]
+    () => LEDGER_THEMES[0], // Always use first (glass) theme
+    []
+  );
+  const selectedTrack = useMemo(
+    () => MUSIC_OPTIONS.find((option) => option.id === selectedTrackId) ?? MUSIC_OPTIONS[0],
+    [selectedTrackId]
   );
   const emojiCollectionCount = useMemo(
     () => Object.values(emojiInventory).filter(Boolean).length,
@@ -472,17 +592,7 @@ export default function HomeScreen() {
       }),
     [flipAnimation]
   );
-  const handleCycleLedgerColor = useCallback(() => {
-    setLedgerToneIndex((prev) => (prev + 1) % LEDGER_THEMES.length);
-  }, []);
-
-  // Handle ledger press - only change color when not in gesture mode
-  const handleLedgerPress = useCallback(() => {
-    if (!isGestureActive) {
-      handleCycleLedgerColor();
-    }
-  }, [isGestureActive, handleCycleLedgerColor]);
-
+  
   useEffect(() => {
     let primaryLoop: Animated.CompositeAnimation | null = null;
     let secondaryLoop: Animated.CompositeAnimation | null = null;
@@ -1036,40 +1146,9 @@ export default function HomeScreen() {
             isLandscape && styles.headerWrapperLandscape
           ]}>
             <View style={[styles.headerShelf, isLandscape && styles.headerShelfLandscape]}>
-              <Text style={[styles.headerText, isLandscape && styles.headerTextLandscape]}>Lettuce World</Text>
-            <View style={styles.headerActions}>
-              {!isLandscape && (isAmbientPlaying || showMusicContainer) && (
-                <Pressable
-                  accessibilityLabel="Open Dream Capsule"
-                  accessibilityHint="Opens the Dream Capsule timer and alarm controls"
-                  style={({ pressed }) => [
-                    styles.alarmButton,
-                    pressed && styles.alarmButtonPressed,
-                  ]}
-                  onPress={handleOpenDreamCapsule}>
-                  <Text style={styles.alarmIcon}>⏰</Text>
-                </Pressable>
-              )}
-              <Pressable
-                accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
-                accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
-                style={({ pressed }) => [
-                  styles.menuButton,
-                  menuOpen && styles.menuButtonActive,
-                  pressed && styles.menuButtonPressed,
-                ]}
-                onPress={() => setMenuOpen((prev) => !prev)}>
-                <Text style={[
-                  styles.menuIcon, 
-                  !isLandscape && styles.menuIconPortrait, // Apply portrait positioning in vertical view
-                  menuOpen && styles.menuIconActive
-                ]}>
-                  {menuOpen ? '✕' : customClickEmoji}
-                </Text>
-              </Pressable>
+              <Text style={[styles.headerText, isLandscape && styles.headerTextLandscape]}>Lettuce Idle Garden</Text>
             </View>
           </View>
-        </View>
 
         <Pressable
           style={[
@@ -1087,52 +1166,7 @@ export default function HomeScreen() {
           ]}
         >
           <View style={[styles.lettuceWrapper, isLandscape && styles.lettuceWrapperLandscape]}>
-            {!isAmbientPlaying ? (
-              <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
-            ) : null}
-            {isAmbientPlaying ? (
-              <View style={styles.audioPulseContainer} pointerEvents="none">
-                <Animated.View
-                  style={[
-                    styles.audioPulseRing,
-                    {
-                      borderColor: accentSurface,
-                      transform: [{ scale: audioPrimaryScale }],
-                      opacity: audioPrimaryOpacity,
-                    },
-                  ]}
-                />
-                <Animated.View
-                  style={[
-                    styles.audioPulseRingSecondary,
-                    {
-                      borderColor: accentHighlight,
-                      transform: [{ scale: audioSecondaryScale }],
-                      opacity: audioSecondaryOpacity,
-                    },
-                  ]}
-                />
-                <Animated.View
-                  style={[
-                    styles.audioPulseCore,
-                    {
-                      backgroundColor: accentSurface,
-                      shadowColor: accentColor,
-                      transform: [{ scale: audioCoreScale }],
-                    },
-                  ]}
-                />
-              </View>
-            ) : (
-              <View style={styles.lettuceBackdrop}>
-                <View style={[styles.backdropHalo, styles.backdropHaloOuter]} />
-                <View style={[styles.backdropHalo, styles.backdropHaloMiddle]} />
-                <View style={[styles.backdropHalo, styles.backdropHaloInner]} />
-                <View style={[styles.backdropBubble, styles.backdropBubbleOne]} />
-                <View style={[styles.backdropBubble, styles.backdropBubbleTwo]} />
-                <View style={[styles.backdropBubble, styles.backdropBubbleThree]} />
-              </View>
-            )}
+            <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
             <GestureDetector gesture={djGesture}>
               <Pressable
                 accessibilityLabel="Harvest lettuce"
@@ -1144,83 +1178,30 @@ export default function HomeScreen() {
                   isLoading && { opacity: 0.5 },
                 ]}
               >
-                <View style={[styles.lettuceButtonBase, { backgroundColor: accentColor }]} />
-                <View
+                <Reanimated.Image
+                  source={require('@/assets/images/clicker-icon.png')}
                   style={[
-                    styles.lettuceButtonFace,
-                    {
-                      backgroundColor: accentSurface,
-                      borderColor: accentColor,
-                      shadowColor: accentColor,
-                    },
+                    styles.lettuceImage,
+                    isAmbientPlaying && djWheelStyle
                   ]}
-                >
-                  <View
-                    style={[
-                      styles.lettuceButtonHighlight,
-                      { backgroundColor: accentHighlight },
-                    ]}
-                  />
-                  <Reanimated.Text 
-                    style={[
-                      styles.lettuceEmoji, 
-                      isAmbientPlaying && djWheelStyle
-                    ]}
-                  >
-                    {customClickEmoji}
-                  </Reanimated.Text>
-                </View>
+                  resizeMode="contain"
+                />
               </Pressable>
             </GestureDetector>
-            {isAmbientPlaying && (
-              <Reanimated.View 
-                key={`volume-indicator-${displayVolume.toFixed(3)}`}
-                style={[
-                  styles.volumeIndicator,
-                  isLandscape && styles.volumeIndicatorLandscape
-                ]}
-              >
-                <View style={[
-                  styles.volumeTrack,
-                  isLandscape && styles.volumeTrackLandscape
-                ]}>
-                  <Reanimated.View 
-                    style={[
-                      styles.volumeFill, 
-                      volumeFillStyle,
-                      { 
-                        backgroundColor: accentColor,
-                      }
-                    ]} 
-                  />
-                </View>
-                <VolumeText 
-                  key={`volume-text-${displayVolume.toFixed(3)}`}
-                  style={[
-                    styles.volumeLabel, 
-                    isLandscape && styles.volumeLabelLandscape
-                  ]}
-                  color={accentColor}
-                />
-              </Reanimated.View>
-            )}
           </View>
 
         <View style={[styles.statsSection, isLandscape && styles.statsSectionLandscape]}>
           <GestureDetector gesture={ledgerSwipeGesture}>
             <Reanimated.View style={containerAnimatedStyle}>
               {!showMusicContainer ? (
-                <Pressable
-                  style={({ pressed }) => [
+                <View
+                  style={[
                     styles.statsCard,
                     { shadowColor: ledgerTheme.shadowColor },
-                    pressed && styles.statsCardPressed,
                     isLandscape && styles.statsCardLandscape,
                   ]}
-                  onPress={handleLedgerPress}
-                  accessibilityRole="button"
+                  accessibilityRole="text"
                   accessibilityLabel="Harvest Ledger"
-                  accessibilityHint="Tap to cycle the ledger background color"
                 >
                   <View
                     pointerEvents="none"
@@ -1234,19 +1215,13 @@ export default function HomeScreen() {
                     <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>Harvest Ledger</Text>
                   </View>
                   <View style={styles.statRow}>
-                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Emojis collected</Text>
+                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Auto Clicks</Text>
                     <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
-                      {emojiCollectionCount.toLocaleString()}
+                      {autoPerSecond.toLocaleString()}/s
                     </Text>
                   </View>
                   <View style={styles.statRow}>
-                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Auto clicks /s</Text>
-                    <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
-                      {autoPerSecond.toLocaleString()}
-                    </Text>
-                  </View>
-                  <View style={styles.statRow}>
-                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Available harvest</Text>
+                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Available Harvest</Text>
                     <Text style={[
                       styles.statValue, 
                       { 
@@ -1258,7 +1233,7 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                   <View style={styles.statRow}>
-                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Lifetime harvest</Text>
+                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Lifetime Harvest</Text>
                     <Text style={[
                       styles.statValue, 
                       { 
@@ -1269,7 +1244,7 @@ export default function HomeScreen() {
                       {formatLifetimeHarvest()}
                     </Text>
                   </View>
-                </Pressable>
+                </View>
               ) : (
                 <Pressable
                   style={({ pressed }) => [
@@ -1278,10 +1253,11 @@ export default function HomeScreen() {
                     pressed && styles.statsCardPressed,
                     isLandscape && styles.statsCardLandscape,
                   ]}
-                  onPress={() => setShowMusicContainer(false)}
+                  onPress={isAlarmRinging ? undefined : handleOpenMusic}
+                  disabled={isAlarmRinging}
                   accessibilityRole="button"
-                  accessibilityLabel="Music Container"
-                  accessibilityHint="Tap to return to harvest ledger or swipe to navigate"
+                  accessibilityLabel="Dream Capsule - Now Playing"
+                  accessibilityHint="Tap to open Music Lounge"
                 >
                   <View
                     pointerEvents="none"
@@ -1291,37 +1267,169 @@ export default function HomeScreen() {
                     pointerEvents="none"
                     style={[styles.statsCardBorder, { borderColor: ledgerTheme.borderColor }]}
                   />
-                  <Text style={[styles.statsTitle, { color: ledgerTheme.tint }]}>🎵 Dream Capsule</Text>
-                  {isAmbientPlaying ? (
-                    <Text style={[styles.dreamCapsuleHint, { color: ledgerTheme.muted }]}>Use device volume buttons to adjust.</Text>
+                  
+                  {/* Header with Now playing label or Alarm label */}
+                  <View style={styles.dreamCapsuleHeader}>
+                    {isAlarmRinging ? (
+                      <View style={[styles.alarmPill, { backgroundColor: 'rgba(255, 68, 68, 0.15)' }]}>
+                        <Text style={[styles.dreamCapsuleLabel, { color: '#ff4444', fontWeight: '700' }]}>
+                          ALARM RINGING
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.dreamCapsuleLabel, { color: ledgerTheme.muted }]}>
+                        Now playing
+                      </Text>
+                    )}
+                  </View>
+                  
+                  {isAlarmRinging ? (
+                    /* Alarm UI */
+                    <>
+                      <View style={styles.dreamCapsuleRow}>
+                        <View style={[styles.alarmIconBox, { backgroundColor: '#ffffff' }]}>
+                          <Text style={styles.alarmEmojiIcon}>⏰</Text>
+                        </View>
+                        <View style={styles.dreamCapsuleBody}>
+                          <Text style={[styles.dreamCapsuleTitle, { color: '#ff4444', fontSize: 22, fontWeight: '900' }]}>
+                            Wake Up!
+                          </Text>
+                          <Text style={[styles.dreamCapsuleSubtitle, { color: ledgerTheme.muted }]}>
+                            Tap button below to dismiss
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      {/* Dismiss Alarm Button */}
+                      <Pressable
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          dismissAlarm();
+                        }}
+                        style={({ pressed }) => [
+                          styles.dreamCapsuleDismissButton,
+                          { 
+                            backgroundColor: pressed ? '#ff3333' : '#ff4444',
+                          }
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Dismiss alarm"
+                      >
+                        <Text style={styles.dreamCapsuleDismissButtonText}>
+                          STOP ALARM
+                        </Text>
+                      </Pressable>
+                    </>
+                  ) : (
+                    /* Normal Now Playing UI */
+                    <>
+                  {/* Now Playing Row with Emoji and Title */}
+                  <View style={styles.dreamCapsuleRow}>
+                    <View style={styles.dreamCapsuleEmojiWrap}>
+                      <View style={[styles.dreamCapsuleEmojiStatic, { backgroundColor: ledgerTheme.borderColor }]}>
+                        <Text style={styles.dreamCapsuleEmoji}>{selectedTrack.emoji}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.dreamCapsuleBody}>
+                      <Text style={[styles.dreamCapsuleTitle, { color: ledgerTheme.tint }]}>
+                        {selectedTrack.name}
+                      </Text>
+                      <Text style={[styles.dreamCapsuleSubtitle, { color: ledgerTheme.muted }]}>
+                        Dream Capsule
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  {/* Controls with three buttons */}
+                  <View style={styles.dreamCapsuleControls}>
+                    <Pressable
+                      onPress={handleSelectPrevious}
+                      style={({ pressed }) => [
+                        styles.dreamCapsuleControlButton,
+                        pressed && styles.dreamCapsuleControlButtonActive,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Previous sound"
+                    >
+                      {({ pressed }) => (
+                        <Feather
+                          name="skip-back"
+                          size={24}
+                          color={pressed ? ledgerTheme.tint : ledgerTheme.muted}
+                        />
+                      )}
+                    </Pressable>
+                    <Pressable
+                      onPress={handleTogglePlaybackWithTimer}
+                      style={({ pressed }) => [
+                        styles.dreamCapsuleControlButton,
+                        styles.dreamCapsuleControlButtonPrimary,
+                        (isAmbientPlaying || pressed) && styles.dreamCapsuleControlButtonActive,
+                        (isAmbientPlaying || pressed) && styles.dreamCapsuleControlButtonPrimaryActive,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={isAmbientPlaying ? "Pause ambience" : "Play ambience"}
+                    >
+                      {({ pressed }) => (
+                        <Feather
+                          name={isAmbientPlaying ? 'pause' : 'play'}
+                          size={isAmbientPlaying ? 30 : 32}
+                          style={!isAmbientPlaying ? { marginLeft: 3 } : undefined}
+                          color={
+                            isAmbientPlaying || pressed
+                              ? ledgerTheme.tint
+                              : ledgerTheme.muted
+                          }
+                        />
+                      )}
+                    </Pressable>
+                    <Pressable
+                      onPress={handleSelectNext}
+                      style={({ pressed }) => [
+                        styles.dreamCapsuleControlButton,
+                        pressed && styles.dreamCapsuleControlButtonActive,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Next sound"
+                    >
+                      {({ pressed }) => (
+                        <Feather
+                          name="skip-forward"
+                          size={24}
+                          color={pressed ? ledgerTheme.tint : ledgerTheme.muted}
+                        />
+                      )}
+                    </Pressable>
+                  </View>
+                  
+                  {/* Progress Bar */}
+                  {sleepProgress !== null ? (
+                    <View
+                      style={styles.sleepProgressWrapper}
+                      accessible
+                      accessibilityRole="progressbar"
+                      accessibilityLabel="Dream Capsule timer progress"
+                      accessibilityValue={{
+                        min: 0,
+                        max: 100,
+                        now: Math.round(sleepProgress * 100),
+                      }}
+                    >
+                      <View style={[styles.sleepProgressTrack, { backgroundColor: ledgerTheme.borderColor }]}>
+                        <View
+                          style={[
+                            styles.sleepProgressFill,
+                            { 
+                              width: `${Math.min(Math.max(sleepProgress, 0), 1) * 100}%`,
+                              backgroundColor: '#2dd78f',
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
                   ) : null}
-                  <View style={styles.statRow}>
-                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Now Playing</Text>
-                    <Text style={[styles.statValue, { color: ledgerTheme.tint }]}>
-                      {isAmbientPlaying ? 'Forest Dawn' : 'Paused'}
-                    </Text>
-                  </View>
-                  <View style={styles.statRow}>
-                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Volume</Text>
-                    <VolumeText 
-                      style={[styles.statValue]}
-                      color={ledgerTheme.tint}
-                    />
-                  </View>
-                  <Pressable 
-                    style={({ pressed }) => [
-                      styles.statRow, 
-                      pressed && { opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.1)' }
-                    ]}
-                    onPress={togglePlayback}
-                    accessibilityRole="button"
-                    accessibilityLabel={isAmbientPlaying ? "Pause music" : "Play music"}
-                  >
-                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Status</Text>
-                    <Text style={[styles.statValue, { color: ledgerTheme.tint, fontWeight: '600' }]}>
-                      {isAmbientPlaying ? '▶️ Playing' : '⏸️ Tap to Play'}
-                    </Text>
-                  </Pressable>
+                  </>
+                  )}
                 </Pressable>
               )}
 
@@ -1331,6 +1439,23 @@ export default function HomeScreen() {
         </View>
         </Pressable>
       </View>
+      
+      {/* Bottom menu button */}
+      <Pressable
+        accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
+        accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
+        style={({ pressed }) => [
+          styles.bottomMenuButton,
+          pressed && styles.menuButtonPressed,
+        ]}
+        onPress={() => setMenuOpen((prev) => !prev)}>
+        <Text style={[
+          styles.menuIcon,
+          menuOpen && styles.menuIconActive
+        ]}>
+          {menuOpen ? '✕' : customClickEmoji}
+        </Text>
+      </Pressable>
     </SafeAreaView>
 
         <Modal
@@ -1900,7 +2025,7 @@ const styles = StyleSheet.create({
   headerShelf: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginTop: 4,
   },
   headerText: {
@@ -1911,6 +2036,7 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(20, 83, 45, 0.1)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+    textAlign: 'center',
   },
   headerTextLandscape: {
   fontSize: 24,
@@ -1940,6 +2066,16 @@ const styles = StyleSheet.create({
     width: 42, // Fixed width for consistent positioning
     height: 42, // Fixed height for consistent positioning
   },
+  bottomMenuButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 20,
+    width: 50,
+    height: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
   menuButtonActive: {
     backgroundColor: 'rgba(21, 101, 52, 0.08)',
     borderColor: 'rgba(21, 101, 52, 0.16)',
@@ -1949,12 +2085,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(21, 101, 52, 0.22)',
   },
   menuIcon: {
-    fontSize: 24,
+    fontSize: 36,
     color: '#166534',
     fontWeight: '700',
-    position: 'absolute', // Absolute positioning within button
-    top: 2, // Position near top
-    right: 4, // Position near right edge
   },
   menuIconPortrait: {
     top: 0, // Move further to top corner in portrait
@@ -2201,12 +2334,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
   },
   lettuceButton: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'visible',
   },
   lettuceButtonBase: {
     position: 'absolute',
@@ -2270,6 +2399,10 @@ const styles = StyleSheet.create({
   },
   lettuceEmoji: {
     fontSize: 68,
+  },
+  lettuceImage: {
+    width: 400,
+    height: 400,
   },
   statsCard: {
     position: 'relative',
@@ -2663,6 +2796,164 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 6,
     opacity: 0.85,
+  },
+  dreamCapsuleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  dreamCapsuleLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  dreamCapsuleMeta: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dreamCapsuleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  },
+  dreamCapsuleEmojiWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  dreamCapsuleEmojiStatic: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dreamCapsuleEmoji: {
+    fontSize: 34,
+  },
+  dreamCapsuleBody: {
+    flex: 1,
+    gap: 6,
+  },
+  dreamCapsuleTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  dreamCapsuleSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  dreamCapsuleStatusBlock: {
+    gap: 4,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  dreamCapsuleStatusLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  dreamCapsuleStatusHeadline: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dreamCapsuleStatusValue: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dreamCapsuleControls: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  dreamCapsuleControlButton: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dreamCapsuleControlButtonPrimary: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2.5,
+  },
+  dreamCapsuleControlButtonActive: {
+    transform: [{ scale: 1.05 }],
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderColor: 'rgba(0,0,0,0.15)',
+  },
+  dreamCapsuleControlButtonPrimaryActive: {
+    transform: [{ scale: 1.08 }],
+  },
+  dreamCapsuleControlIcon: {
+    fontSize: 24,
+  },
+  dreamCapsuleControlIconPrimary: {
+    fontSize: 28,
+  },
+  sleepProgressWrapper: {
+    marginTop: 16,
+    paddingHorizontal: 4,
+  },
+  sleepProgressTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  sleepProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  dreamCapsuleDismissButton: {
+    marginTop: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    backgroundColor: '#ff4444',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dreamCapsuleDismissButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  alarmPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  alarmIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  alarmEmojiIcon: {
+    fontSize: 28,
   },
   promenadeSafeArea: {
     flex: 1,

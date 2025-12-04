@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
   View,
   Vibration,
+  AppState,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -19,7 +20,7 @@ import { Feather } from '@expo/vector-icons';
 import { useAudioPlayer } from 'expo-audio';
 import { ALARM_CHIME_DATA_URI } from '@/assets/audio/alarmChime';
 import { MUSIC_GROUPS, MUSIC_OPTIONS, type MusicOption } from '@/constants/music';
-import { useAmbientAudio } from '@/context/AmbientAudioContext';
+import { useAmbientAudio, type SleepCircleState } from '@/context/AmbientAudioContext';
 import type { ColorScheme } from '@/context/ThemeContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useGame } from '@/context/GameContext';
@@ -1131,18 +1132,6 @@ const TIMER_ACTION_OPTIONS: { id: TimerAction; title: string; description: strin
   },
 ];
 
-type SleepCircleState =
-  | { mode: 'timer'; duration: number; targetTimestamp: number; startedAt: number; action: TimerAction }
-  | {
-      mode: 'alarm';
-      fireTimestamp: number;
-      hour: number;
-      minute: number;
-      period: AlarmPeriod;
-      scheduledAt: number;
-    }
-  | null;
-
 type MusicContentProps = {
   mode?: 'screen' | 'modal';
   onRequestClose?: () => void;
@@ -1190,9 +1179,13 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
     selectedTrackId,
     isPlaying: isAmbientPlaying,
     error: ambientError,
+    sleepCircle,
     selectTrack,
     togglePlayback,
     pause: pauseAmbient,
+    setSleepCircle,
+    triggerAlarm,
+    isAlarmRinging,
   } = useAmbientAudio();
   const [sleepModalOpen, setSleepModalOpen] = useState(false);
   
@@ -1219,7 +1212,6 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const [alarmHour, setAlarmHour] = useState<number>(7);
   const [alarmMinute, setAlarmMinute] = useState<number>(0);
   const [alarmPeriod, setAlarmPeriod] = useState<AlarmPeriod>('AM');
-  const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
   const secondaryActionLabel = useMemo(() => {
     if (sleepCircle) {
       return sleepMode === 'alarm' ? 'Clear alarm' : 'Clear timer';
@@ -1367,44 +1359,26 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
   const handleSleepComplete = useCallback(
     async (state: Exclude<SleepCircleState, null>) => {
       setSleepCircle(null);
-      Vibration.vibrate([0, 400, 200, 400], false);
-
+      
       pauseAmbient();
 
       const shouldPlayAlarm =
         state.mode === 'alarm' || (state.mode === 'timer' && state.action === 'alarm');
 
       if (shouldPlayAlarm) {
+        // Trigger the custom alarm UI
+        triggerAlarm();
+        
         try {
           alarmPlayer.seekTo(0);
+          alarmPlayer.loop = true; // Make the alarm loop continuously
           alarmPlayer.play();
         } catch (error) {
           console.warn('Alarm playback failed', error);
         }
       }
-
-      const title = shouldPlayAlarm ? 'Alarm ringing' : 'Timer finished';
-      const message = shouldPlayAlarm
-        ? 'Time to wake up! Your Dream Capsule alarm is sounding.'
-        : 'Playback faded out with the Dream Capsule timer.';
-
-      Alert.alert(title, message, [
-        shouldPlayAlarm
-          ? {
-              text: 'Stop alarm',
-              onPress: () => {
-                try {
-                  alarmPlayer.pause();
-                  alarmPlayer.seekTo(0);
-                } catch (error) {
-                  console.warn('Alarm pause failed', error);
-                }
-              },
-            }
-          : { text: 'OK' },
-      ]);
     },
-    [alarmPlayer, pauseAmbient]
+    [alarmPlayer, pauseAmbient, triggerAlarm]
   );
 
   const scheduleSleepTrigger = useCallback(
@@ -1431,7 +1405,46 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
 
   useEffect(() => {
     scheduleSleepTrigger(sleepCircle);
-  }, [scheduleSleepTrigger, sleepCircle]);
+    
+    // Add polling check as backup to ensure alarm fires even if setTimeout fails
+    // This is especially important for mobile apps that may be backgrounded
+    if (!sleepCircle) {
+      return;
+    }
+
+    const checkInterval = setInterval(() => {
+      const now = Date.now();
+      const target = sleepCircle.mode === 'timer' ? sleepCircle.targetTimestamp : sleepCircle.fireTimestamp;
+      
+      // If we've passed the target time and alarm isn't already ringing, trigger it
+      if (now >= target && !isAlarmRinging) {
+        handleSleepComplete(sleepCircle);
+      }
+    }, 1000); // Check every second
+
+    return () => {
+      clearInterval(checkInterval);
+    };
+  }, [scheduleSleepTrigger, sleepCircle, handleSleepComplete, isAlarmRinging]);
+
+  // Check for missed alarms when app becomes active (comes from background)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active' && sleepCircle) {
+        const now = Date.now();
+        const target = sleepCircle.mode === 'timer' ? sleepCircle.targetTimestamp : sleepCircle.fireTimestamp;
+        
+        // If we missed the alarm while backgrounded and it's not already ringing, trigger it now
+        if (now >= target && !isAlarmRinging) {
+          handleSleepComplete(sleepCircle);
+        }
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [sleepCircle, handleSleepComplete, isAlarmRinging]);
 
   const handleOpenSleepModal = useCallback(() => {
     if (sleepCircle?.mode === 'timer') {
