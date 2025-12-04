@@ -2427,19 +2427,19 @@ const styles = StyleSheet.create({
   },
   statsCard: {
     position: 'relative',
-    borderRadius: 24, // Slightly reduced for more compact look
-    paddingVertical: 18, // Reduced for more compact design
-    paddingHorizontal: 24, // Reduced for better fit
-    gap: 12, // Reduced gap for more compact design
+    borderRadius: 24,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    gap: 14,
     overflow: 'hidden',
-    shadowOpacity: 0.18, // Slightly reduced shadow
-    shadowOffset: { width: 0, height: 8 }, // Slightly reduced shadow
-    shadowRadius: 16, // Slightly reduced shadow radius
-    elevation: 5, // Slightly reduced elevation
+    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 16,
+    elevation: 5,
     backgroundColor: 'transparent',
-    minWidth: 240, // Reduced for better screen fit
-    maxWidth: 280, // Added max width for consistency
-    borderWidth: 0, // Remove border for cleaner look
+    minWidth: 240,
+    maxWidth: 300,
+    borderWidth: 0,
     borderColor: 'transparent',
   },
   statsCardPressed: {
@@ -2822,13 +2822,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   dreamCapsuleLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
     textTransform: 'uppercase',
+    opacity: 0.85,
   },
   dreamCapsuleMeta: {
     fontSize: 12,
@@ -2837,37 +2838,40 @@ const styles = StyleSheet.create({
   dreamCapsuleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 18,
+    gap: 14,
+    marginBottom: 4,
   },
   dreamCapsuleEmojiWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
   },
   dreamCapsuleEmojiStatic: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dreamCapsuleEmoji: {
-    fontSize: 34,
+    fontSize: 32,
   },
   dreamCapsuleBody: {
     flex: 1,
-    gap: 6,
+    gap: 4,
   },
   dreamCapsuleTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
+    lineHeight: 22,
   },
   dreamCapsuleSubtitle: {
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 16,
+    opacity: 0.8,
   },
   dreamCapsuleStatusBlock: {
     gap: 4,
@@ -2890,16 +2894,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   dreamCapsuleControls: {
-    marginTop: 12,
+    marginTop: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
+    gap: 20,
   },
   dreamCapsuleControlButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     borderWidth: 2,
     borderColor: 'rgba(0,0,0,0.1)',
     backgroundColor: 'rgba(255,255,255,0.5)',
@@ -2907,9 +2911,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dreamCapsuleControlButtonPrimary: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     borderWidth: 2.5,
   },
   dreamCapsuleControlButtonActive: {
@@ -2927,46 +2931,46 @@ const styles = StyleSheet.create({
     fontSize: 28,
   },
   sleepProgressWrapper: {
-    marginTop: 16,
-    paddingHorizontal: 4,
+    marginTop: 12,
+    paddingHorizontal: 2,
   },
   sleepProgressTrack: {
-    height: 4,
-    borderRadius: 2,
+    height: 5,
+    borderRadius: 2.5,
     overflow: 'hidden',
   },
   sleepProgressFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 2.5,
   },
   dreamCapsuleDismissButton: {
-    marginTop: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    marginTop: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 20,
     backgroundColor: '#ff4444',
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dreamCapsuleDismissButtonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
   alarmPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 999,
   },
   alarmIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -2974,7 +2978,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   alarmEmojiIcon: {
-    fontSize: 28,
+    fontSize: 32,
   },
   promenadeSafeArea: {
     flex: 1,
