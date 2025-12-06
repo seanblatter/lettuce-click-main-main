@@ -33,6 +33,7 @@ import { preloadRewardedAd, showRewardedAd } from '@/lib/rewardedAd';
 import { TemperatureUnitModal } from '@/components/TemperatureUnitModal';
 import { RSSWidget } from '@/components/RSSWidget';
 import { GamesHub } from '@/components/GamesHub';
+import { useWidgetPromenade } from '@/hooks/useWidgetPromenade';
 import { Platform, NativeModules } from 'react-native';
 
 const MODAL_STORAGE_KEY = 'lettuce-click:grow-your-park-dismissed';
