@@ -14,8 +14,10 @@ export interface UseWidgetPromenadeResult {
  * Only available on Android platform
  */
 export const useWidgetPromenade = (): UseWidgetPromenadeResult => {
-  // Return stub implementation for non-Android platforms
-  if (Platform.OS !== 'android') {
+  // Return stub implementation for non-Android platforms or if module not available
+  const isAndroidWithModule = Platform.OS === 'android' && WidgetPromenadeModule;
+  
+  if (!isAndroidWithModule) {
     return {
       setWidgetImage: async () => ({ success: false, widgetCount: 0 }),
       getInstalledWidgetCount: async () => 0,
@@ -35,7 +37,7 @@ export const useWidgetPromenade = (): UseWidgetPromenadeResult => {
         const result = await WidgetPromenadeModule.setWidgetImage(imageUri);
         return {
           success: true,
-          widgetCount: result || 0,
+          widgetCount: result?.widgetCount || result || 0,
         };
       } catch (error) {
         console.error('Failed to set widget image:', error);

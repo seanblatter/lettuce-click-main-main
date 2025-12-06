@@ -238,12 +238,18 @@ export default function HomeScreen() {
   };
 
   // Persist selection to storage
-  const handleSelectWidgetPromenadeId = useCallback((id: string) => {
+  const { setWidgetImage } = useWidgetPromenade();
+  
+  const handleSelectWidgetPromenadeId = useCallback((id: string, imageUri: string) => {
     setSelectedWidgetPromenadeId(id);
     AsyncStorage.setItem(WIDGET_PROMENADE_SELECTED_ID_KEY, id);
     // Save to App Group for iOS widget
     saveWidgetArtworkToAppGroup(id);
-  }, []);
+    // Update Android widget with the image
+    setWidgetImage(imageUri).catch(error => {
+      console.warn('Failed to update widget image:', error);
+    });
+  }, [setWidgetImage]);
   const [availableBonusSpins, setAvailableBonusSpins] = useState(0);
   const [bonusMessage, setBonusMessage] = useState<string | null>(null);
   const [lastBonusReward, setLastBonusReward] = useState<number | null>(null);
@@ -1977,7 +1983,7 @@ export default function HomeScreen() {
                     </View>
                     <Pressable
                       style={[styles.promenadeSelectButton, selectedWidgetPromenadeId === entry.id && styles.promenadeSelectButtonSelected]}
-                      onPress={() => handleSelectWidgetPromenadeId(entry.id)}
+                      onPress={() => handleSelectWidgetPromenadeId(entry.id, entry.uri)}
                       accessibilityLabel={selectedWidgetPromenadeId === entry.id ? "Selected for Android widget" : "Select for Android widget"}
                     >
                       <Text style={styles.promenadeSelectText}>
