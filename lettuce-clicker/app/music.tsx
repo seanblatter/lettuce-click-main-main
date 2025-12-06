@@ -610,6 +610,80 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       letterSpacing: 0.8,
       textTransform: 'uppercase',
     },
+    premiumUpgradeCard: {
+      marginTop: 24,
+      marginHorizontal: 0,
+      backgroundColor: palette.cardBackground,
+      borderRadius: 24,
+      padding: 24,
+      borderWidth: 1,
+      borderColor: palette.cardBorder,
+      alignItems: 'center',
+      shadowColor: palette.cardShadow,
+      shadowOpacity: isDark ? 0.35 : 0.12,
+      shadowRadius: isDark ? 12 : 8,
+      shadowOffset: { width: 0, height: isDark ? 8 : 4 },
+      elevation: isDark ? 3 : 1,
+    },
+    premiumUpgradeIcon: {
+      fontSize: 48,
+      marginBottom: 16,
+    },
+    premiumUpgradeTitle: {
+      fontSize: 22,
+      fontWeight: '700',
+      color: palette.optionName,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    premiumUpgradeDescription: {
+      fontSize: 14,
+      color: palette.optionDescription,
+      marginBottom: 16,
+      textAlign: 'center',
+    },
+    premiumFeaturesList: {
+      width: '100%',
+      gap: 12,
+      marginBottom: 24,
+    },
+    premiumFeatureItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    premiumFeatureBullet: {
+      fontSize: 20,
+      width: 28,
+      textAlign: 'center',
+    },
+    premiumFeatureText: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: '600',
+      color: palette.optionName,
+    },
+    premiumUpgradeButton: {
+      width: '100%',
+      paddingVertical: 14,
+      borderRadius: 12,
+      backgroundColor: '#16a34a',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: '#15803d',
+      shadowColor: '#000',
+      shadowOpacity: isDark ? 0.35 : 0.12,
+      shadowRadius: isDark ? 12 : 8,
+      shadowOffset: { width: 0, height: isDark ? 8 : 4 },
+      elevation: isDark ? 3 : 1,
+    },
+    premiumUpgradeButtonText: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: '#fff',
+      letterSpacing: 0.3,
+    },
     secondaryGroup: {
       gap: 14,
     },
@@ -1135,9 +1209,11 @@ const TIMER_ACTION_OPTIONS: { id: TimerAction; title: string; description: strin
 type MusicContentProps = {
   mode?: 'screen' | 'modal';
   onRequestClose?: () => void;
+  hasPremiumUpgrade?: boolean;
+  onPurchasePremium?: () => void;
 };
 
-export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentProps) {
+export function MusicContent({ mode = 'screen', onRequestClose, hasPremiumUpgrade = false, onPurchasePremium }: MusicContentProps) {
   const insets = useSafeAreaInsets();
   const { colorScheme: appColorScheme } = useAppTheme();
   const { gardenBackgroundColor } = useGame();
@@ -2043,7 +2119,7 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
           </View>
         ))}
 
-        {secondaryGroups.length > 0 ? (
+        {secondaryGroups.length > 0 && !hasPremiumUpgrade ? (
           <View style={styles.groupSection}>
             <Pressable
               style={styles.groupToggle}
@@ -2053,8 +2129,42 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
             >
               <Text style={styles.groupToggleText}>{showAllGroups ? 'Hide more mixes' : 'Show more mixes'}</Text>
             </Pressable>
-            {showAllGroups
-              ? secondaryGroups.map((group) => (
+            {showAllGroups ? (
+              <View style={styles.premiumUpgradeCard}>
+                <Text style={styles.premiumUpgradeIcon}>🎵</Text>
+                <Text style={styles.premiumUpgradeTitle}>Unlock Premium Music</Text>
+                <Text style={styles.premiumUpgradeDescription}>
+                  Get access to exclusive audio tracks:
+                </Text>
+                <View style={styles.premiumFeaturesList}>
+                  <View style={styles.premiumFeatureItem}>
+                    <Text style={styles.premiumFeatureBullet}>🤍</Text>
+                    <Text style={styles.premiumFeatureText}>White Noises</Text>
+                  </View>
+                  <View style={styles.premiumFeatureItem}>
+                    <Text style={styles.premiumFeatureBullet}>⚫</Text>
+                    <Text style={styles.premiumFeatureText}>Grey Noises</Text>
+                  </View>
+                  <View style={styles.premiumFeatureItem}>
+                    <Text style={styles.premiumFeatureBullet}>🏕️</Text>
+                    <Text style={styles.premiumFeatureText}>Camping Sounds</Text>
+                  </View>
+                  <View style={styles.premiumFeatureItem}>
+                    <Text style={styles.premiumFeatureBullet}>🎶</Text>
+                    <Text style={styles.premiumFeatureText}>Gentle Music</Text>
+                  </View>
+                </View>
+                <Pressable
+                  style={styles.premiumUpgradeButton}
+                  onPress={onPurchasePremium}
+                  accessible
+                  accessibilityLabel="Upgrade to Premium to unlock music"
+                >
+                  <Text style={styles.premiumUpgradeButtonText}>Upgrade to Premium</Text>
+                </Pressable>
+              </View>
+            ) : showAllGroups ? (
+              secondaryGroups.map((group) => (
                   <View key={group.id} style={styles.secondaryGroup}>
                     <Text style={styles.groupTitle}>{group.label}</Text>
                     <Text style={styles.groupDescription}>{group.intro}</Text>
@@ -2104,7 +2214,61 @@ export function MusicContent({ mode = 'screen', onRequestClose }: MusicContentPr
                     </View>
                   </View>
                 ))
-              : null}
+            ) : null}
+          </View>
+        ) : null}
+        {hasPremiumUpgrade && secondaryGroups.length > 0 ? (
+          <View style={styles.groupSection}>
+            {secondaryGroups.map((group) => (
+                <View key={group.id} style={styles.secondaryGroup}>
+                  <Text style={styles.groupTitle}>{group.label}</Text>
+                  <Text style={styles.groupDescription}>{group.intro}</Text>
+                  <View style={styles.optionList}>
+                    {group.options.map((option) => {
+                      const isSelected = option.id === selectedTrackId;
+                      const isPlayingOption = isSelected && isAmbientPlaying;
+                      return (
+                        <Pressable
+                          key={option.id}
+                          style={[styles.optionRow, isSelected && styles.optionRowActive]}
+                          onPress={() => handleSelectTrack(option.id)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: isSelected }}
+                        >
+                          <View style={styles.optionAvatar}>
+                            {isPlayingOption ? (
+                              <AudioOrb emoji={option.emoji} palette={palette} styles={styles} />
+                            ) : (
+                              <View
+                                style={[
+                                  styles.optionEmojiWrap,
+                                  isSelected && styles.optionEmojiWrapActive,
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.optionEmoji,
+                                    isSelected && styles.optionEmojiActive,
+                                  ]}
+                                >
+                                  {option.emoji}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <View style={styles.optionBody}>
+                            <Text style={[styles.optionName, isSelected && styles.optionNameActive]}>
+                              {option.name}
+                            </Text>
+                            <Text style={styles.optionDescription}>{option.description}</Text>
+                          </View>
+                          {isPlayingOption ? <Text style={styles.optionBadge}>Playing</Text> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
           </View>
         ) : null}
           </>

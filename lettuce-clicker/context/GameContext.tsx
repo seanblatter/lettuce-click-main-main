@@ -163,6 +163,7 @@ type GameContextValue = {
   updateSlicerEmojiStats: (emojiId: string) => void;
   updateSlicerGameStats: (emojiIds: string[]) => void;
   updateHopEmojiStats: (emojiId: string, score: number, isGameEnd: boolean) => void;
+  updateCheckersEmojiStats: (emojiId: string, didWin: boolean) => void;
   registerCustomEmoji: (
     emoji: string,
     options?: { name?: string; costOverride?: number; imageUrl?: string; tags?: string[] }
@@ -590,6 +591,8 @@ export type EmojiGameStats = {
   hopBestScore?: number;
   hopTotalScore?: number;
   hopGamesPlayed?: number;
+  checkersWins?: number;
+  checkersGamesPlayed?: number;
 };
 
 type StoredGameState = {
@@ -1229,6 +1232,23 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     });
   }, []);
 
+  const updateCheckersEmojiStats = useCallback((emojiId: string, didWin: boolean) => {
+    console.log('[GameContext] updateCheckersEmojiStats called:', { emojiId, didWin });
+    setEmojiGameStats((prev) => {
+      const current = prev[emojiId] || {};
+      const updated = {
+        ...prev,
+        [emojiId]: {
+          ...current,
+          checkersWins: (current.checkersWins || 0) + (didWin ? 1 : 0),
+          checkersGamesPlayed: (current.checkersGamesPlayed || 0) + 1,
+        },
+      };
+      console.log('[GameContext] Updated stats:', { emojiId, stats: updated[emojiId] });
+      return updated;
+    });
+  }, []);
+
   const placeEmoji = useCallback(
     (emojiId: string, position: { x: number; y: number }) => {
       if (!emojiInventory[emojiId]) {
@@ -1479,6 +1499,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     updateSlicerEmojiStats,
     updateSlicerGameStats,
     updateHopEmojiStats,
+    updateCheckersEmojiStats,
     registerCustomEmoji,
     setProfileLifetimeTotal,
     addHarvest,

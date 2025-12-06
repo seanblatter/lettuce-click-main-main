@@ -16,6 +16,10 @@ function RootNavigation() {
       <Stack initialRouteName="(tabs)">
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} initialParams={{ screen: 'garden' }} />
         <Stack.Screen
+          name="chess"
+          options={{ headerShown: false, presentation: 'fullScreenModal' }}
+        />
+        <Stack.Screen
           name="modal"
           options={{ presentation: 'modal', title: 'Modal', animation: 'slide_from_bottom' }}
         />

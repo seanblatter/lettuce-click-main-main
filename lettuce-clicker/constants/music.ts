@@ -35,17 +35,17 @@ export const MUSIC_OPTIONS = [
     family: 'grey' as const,
   },
   {
-    id: 'grey-lanterns',
-    name: 'Grey Lanterns',
-    emoji: '🏮',
-    description: 'Soft drones and glowing chimes for twilight planting.',
-    family: 'grey' as const,
-  },
-  {
     id: 'rain-mist',
     name: 'Rain Mist',
     emoji: '🌧️',
     description: 'Soft droplets on greenhouse glass for steady calm.',
+    family: 'rain' as const,
+  },
+  {
+    id: 'grey-lanterns',
+    name: 'Grey Lanterns',
+    emoji: '🏮',
+    description: 'Soft drones and glowing chimes for twilight planting.',
     family: 'rain' as const,
   },
   {
@@ -157,7 +157,7 @@ export const MUSIC_GROUPS = [
   { id: 'ocean', label: 'Ocean Waves', intro: 'Coastal hush and tidal sways for breezy focus.' },
   { id: 'white', label: 'White Noise', intro: 'Bright, energetic mixes to keep the garden lively.' },
   { id: 'grey', label: 'Grey Noise', intro: 'Softly balanced sounds that settle the senses.' },
-  { id: 'rain', label: 'Rainfall Retreats', intro: 'Falling drops and distant thunder for gentle nights.' },
+  { id: 'rain', label: 'Open Space', intro: 'Falling drops and distant thunder for gentle nights.' },
   { id: 'night', label: 'Night Sky', intro: 'Synth swells and starlit drones for restorative sleep.' },
 ] as const;
 

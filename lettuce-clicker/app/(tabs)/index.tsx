@@ -726,11 +726,11 @@ export default function HomeScreen() {
     }
 
     if (activeNotice.type === 'returning') {
-      return `Welcome Back ${friendlyName}!`;
+      return 'You\'re Back!';
     }
 
-    return `${activeNotice.greeting}, ${friendlyName}!`;
-  }, [activeNotice, friendlyName]);
+    return 'While You Were Away';
+  }, [activeNotice]);
 
   const noticeCopy = useMemo(() => {
     if (!activeNotice) {
@@ -738,10 +738,10 @@ export default function HomeScreen() {
     }
 
     if (activeNotice.type === 'returning') {
-      return `When you signed back in you had ${activeNotice.harvestSnapshot.toLocaleString()} harvest with lifetime totals at ${activeNotice.lifetimeHarvestSnapshot.toLocaleString()}. Auto clicks continue at ${activeNotice.autoPerSecondSnapshot.toLocaleString()} per second.`;
+      return `You have ${activeNotice.harvestSnapshot.toLocaleString()} harvest with lifetime totals at ${activeNotice.lifetimeHarvestSnapshot.toLocaleString()}. Auto clicks continue at ${activeNotice.autoPerSecondSnapshot.toLocaleString()} per second.`;
     }
 
-    const baseMessage = `You gathered ${activeNotice.passiveHarvest.toLocaleString()} harvest while away. Your stores now hold ${activeNotice.harvestSnapshot.toLocaleString()} harvest with lifetime totals at ${activeNotice.lifetimeHarvestSnapshot.toLocaleString()}. Auto clicks continue humming at ${activeNotice.autoPerSecondSnapshot.toLocaleString()} per second.`;
+    const baseMessage = `You gathered ${activeNotice.passiveHarvest.toLocaleString()} harvest while away. Your stores now hold ${activeNotice.harvestSnapshot.toLocaleString()} harvest. Auto clicks continue at ${activeNotice.autoPerSecondSnapshot.toLocaleString()} per second.`;
 
     if (hasDoubledPassiveHarvest && activeNotice.passiveHarvest > 0) {
       const doubledTotal = (activeNotice.passiveHarvest * 2).toLocaleString();
@@ -1776,32 +1776,32 @@ export default function HomeScreen() {
             <Text style={styles.noticeTitle}>{noticeTitle}</Text>
             <Text style={styles.noticeCopy}>{noticeCopy}</Text>
             {activeNotice?.type === 'background' && activeNotice?.passiveHarvest && activeNotice.passiveHarvest > 0 ? (
-              <Text style={styles.noticeInfoText}>
-                {hasDoubledPassiveHarvest
-                  ? 'Bonus applied! Your doubled clicks are already in your harvest.'
-                  : `Watch a quick clip to double your ${activeNotice.passiveHarvest.toLocaleString()} passive clicks.`}
-              </Text>
-            ) : null}
-            {activeNotice?.type === 'background' && activeNotice?.passiveHarvest && activeNotice.passiveHarvest > 0 ? (
-              <Pressable
-                style={[
-                  styles.noticeSecondaryButton,
-                  (hasDoubledPassiveHarvest || isWatchingResumeOffer) && styles.noticeSecondaryButtonDisabled,
-                ]}
-                onPress={handleWatchResumeBonus}
-                disabled={hasDoubledPassiveHarvest || isWatchingResumeOffer}
-              >
-                <Text style={styles.noticeSecondaryText}>
+              <>
+                <Text style={styles.noticeInfoText}>
                   {hasDoubledPassiveHarvest
-                    ? 'Thanks for watching!'
-                    : isWatchingResumeOffer
-                      ? 'Loading bonus…'
-                      : `Double to ${(activeNotice.passiveHarvest * 2).toLocaleString()} clicks`}
+                    ? 'Bonus applied! Your doubled clicks are already in your harvest.'
+                    : `Watch a short ad to double your ${activeNotice.passiveHarvest.toLocaleString()} passive clicks!`}
                 </Text>
-              </Pressable>
+                <Pressable
+                  style={[
+                    styles.noticeSecondaryButton,
+                    (hasDoubledPassiveHarvest || isWatchingResumeOffer) && styles.noticeSecondaryButtonDisabled,
+                  ]}
+                  onPress={handleWatchResumeBonus}
+                  disabled={hasDoubledPassiveHarvest || isWatchingResumeOffer}
+                >
+                  <Text style={styles.noticeSecondaryText}>
+                    {hasDoubledPassiveHarvest
+                      ? '✓ Bonus Claimed'
+                      : isWatchingResumeOffer
+                        ? 'Loading ad…'
+                        : `Watch Ad → ${(activeNotice.passiveHarvest * 2).toLocaleString()} clicks`}
+                  </Text>
+                </Pressable>
+              </>
             ) : null}
             <Pressable style={styles.noticeButton} onPress={handleDismissNotice}>
-              <Text style={styles.noticeButtonText}>Back to the garden</Text>
+              <Text style={styles.noticeButtonText}>Continue</Text>
             </Pressable>
           </View>
         </View>
@@ -1926,7 +1926,7 @@ export default function HomeScreen() {
         animationType="slide"
         onRequestClose={handleCloseMusicQuickAction}
       >
-        <MusicContent mode="modal" onRequestClose={handleCloseMusicQuickAction} />
+        <MusicContent mode="modal" onRequestClose={handleCloseMusicQuickAction} hasPremiumUpgrade={hasPremiumUpgrade} onPurchasePremium={purchasePremiumUpgrade} />
       </Modal>
 
       <Modal
@@ -2091,7 +2091,7 @@ const styles = StyleSheet.create({
   bottomMenuButton: {
     position: 'absolute',
     right: 16,
-    bottom: 20,
+    bottom: Platform.OS === 'ios' ? 110 : 100,
     width: 50,
     height: 50,
     alignItems: 'center',

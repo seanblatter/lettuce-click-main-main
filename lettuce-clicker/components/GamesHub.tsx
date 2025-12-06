@@ -7,12 +7,14 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
+  TouchableOpacity,
 } from 'react-native';
-// Use explicit extension to help TS resolver
 import FlappyLettuceGame from './FlappyLettuceGame.tsx';
 import LettuceSlicerGame from './LettuceSlicerGame';
 import { LettuceHopGame } from './LettuceHopGame';
 import type { EmojiDefinition } from '@/context/GameContext';
+import { ThemedText } from './themed-text';
+import { router } from 'expo-router';
 
 interface GamesHubProps {
   visible: boolean;
@@ -180,29 +182,19 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
               <Pressable
                 style={({ pressed }) => [
                   styles.gameCard,
-                  !hasPremiumUpgrade && styles.gameCardLocked,
-                  pressed && hasPremiumUpgrade && styles.gameCardPressed,
+                  pressed && styles.gameCardPressed,
                 ]}
-                onPress={hasPremiumUpgrade ? handleOpenLettuceSlicer : onPurchasePremium}
+                onPress={handleOpenLettuceSlicer}
                 accessibilityRole="button"
-                accessibilityLabel={hasPremiumUpgrade ? "Play Lettuce Slicer" : "Unlock Lettuce Slicer with Premium"}
+                accessibilityLabel="Play Lettuce Slicer"
               >
-                {!hasPremiumUpgrade && (
-                  <View style={styles.lockOverlay}>
-                    <Text style={styles.lockIcon}>🔒</Text>
-                  </View>
-                )}
-                <View style={[styles.gameIconContainer, !hasPremiumUpgrade && styles.gameIconLocked]}>
+                <View style={styles.gameIconContainer}>
                   <Text style={styles.gameIcon}>🔪</Text>
                 </View>
                 <View style={styles.gameInfo}>
-                  <Text style={[styles.gameTitle, !hasPremiumUpgrade && styles.gameTitleLocked]}>
-                    Lettuce Slicer {!hasPremiumUpgrade && '🔒'}
-                  </Text>
-                  <Text style={[styles.gameDescription, !hasPremiumUpgrade && styles.gameDescriptionLocked]}>
-                    {hasPremiumUpgrade 
-                      ? 'Slice emojis mid-air. Avoid bombs and ghosts!'
-                      : 'Upgrade to Premium to unlock'}
+                  <Text style={styles.gameTitle}>Lettuce Slicer</Text>
+                  <Text style={styles.gameDescription}>
+                    Slice emojis mid-air. Avoid bombs and ghosts!
                   </Text>
                 </View>
                 <Text style={styles.gameChevron}>›</Text>
@@ -233,6 +225,40 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
                   <Text style={[styles.gameDescription, !hasPremiumUpgrade && styles.gameDescriptionLocked]}>
                     {hasPremiumUpgrade
                       ? 'Hop up platforms and reach new heights! Avoid bombs and use rockets.'
+                      : 'Upgrade to Premium to unlock'}
+                  </Text>
+                </View>
+                <Text style={styles.gameChevron}>›</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.gameCard,
+                  !hasPremiumUpgrade && styles.gameCardLocked,
+                  pressed && hasPremiumUpgrade && styles.gameCardPressed,
+                ]}
+                onPress={hasPremiumUpgrade ? () => {
+                  onRequestClose();
+                  setTimeout(() => router.push('/chess'), 100);
+                } : onPurchasePremium}
+                accessibilityRole="button"
+                accessibilityLabel={hasPremiumUpgrade ? "Play Lettuce Checkers" : "Unlock Lettuce Checkers with Premium"}
+              >
+                {!hasPremiumUpgrade && (
+                  <View style={styles.lockOverlay}>
+                    <Text style={styles.lockIcon}>🔒</Text>
+                  </View>
+                )}
+                <View style={[styles.gameIconContainer, !hasPremiumUpgrade && styles.gameIconLocked]}>
+                  <Text style={styles.gameIcon}>♟️</Text>
+                </View>
+                <View style={styles.gameInfo}>
+                  <Text style={[styles.gameTitle, !hasPremiumUpgrade && styles.gameTitleLocked]}>
+                    Lettuce Checkers {!hasPremiumUpgrade && '🔒'}
+                  </Text>
+                  <Text style={[styles.gameDescription, !hasPremiumUpgrade && styles.gameDescriptionLocked]}>
+                    {hasPremiumUpgrade
+                      ? 'Choose 2 emoji characters and play checkers vs CPU.'
                       : 'Upgrade to Premium to unlock'}
                   </Text>
                 </View>
@@ -516,5 +542,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#1f2937',
+  },
+  mancalaButton: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginBottom: 12,
   },
 });

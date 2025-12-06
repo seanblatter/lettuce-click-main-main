@@ -1,4 +1,6 @@
 {
-  "compilerOptions": {},
+  "compilerOptions": {
+    "baseUrl": "./lettuce-clicker"
+  },
   "extends": "expo/tsconfig.base"
 }

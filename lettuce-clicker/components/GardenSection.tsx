@@ -40,6 +40,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { computeBellCurveCost, emojiCategoryOrder, formatClickValue, MIN_EMOJI_COST } from '@/constants/emojiCatalog';
 import { EmojiDefinition, Placement, TextStyleId, WidgetPromenadeEntry } from '@/context/GameContext';
+import { useGame } from '@/context/GameContext';
 import { fetchEmojiKitchenMash, formatCustomEmojiName, getRandomCompatibleEmoji } from '@/lib/emojiKitchenService';
 
 type Props = {
@@ -335,6 +336,7 @@ export function GardenSection({
 }: Props) {
   const insets = useSafeAreaInsets();
   const dimensions = useWindowDimensions();
+  const gameContext = useGame();
   
   // Orientation detection and responsive layout
   const isLandscape = dimensions.width > dimensions.height;
@@ -1746,20 +1748,6 @@ export function GardenSection({
         ]}
         showsVerticalScrollIndicator={false}
         scrollEnabled={!isDrawingGestureActive}>
-        <View style={[styles.harvestBanner, { paddingHorizontal: responsiveBannerPadding }, isLandscape && styles.harvestBannerLandscape]}>
-          {/* Decorative background circles */}
-          <View style={styles.harvestDecorativeCircle1} />
-          <View style={styles.harvestDecorativeCircle2} />
-          <View style={styles.harvestDecorativeCircle3} />
-          
-          <Text style={[styles.harvestTitle, isLandscape && styles.harvestTitleLandscape]}>Welcome to Lettuce Garden</Text>
-          <Text style={[styles.harvestAmount, isLandscape && styles.harvestAmountLandscape]}>
-            You have harvested {formatHarvestDisplay(harvest)} clicks.
-          </Text>
-          <Text style={[styles.harvestHint, isLandscape && styles.harvestHintLandscape]}>
-            You have harvested {totalCollected.toLocaleString()} emojis / 100,000+
-          </Text>
-        </View>
 
         <View style={[styles.launcherRow, isLandscape && styles.launcherRowLandscape]}>
           <Pressable
@@ -2549,6 +2537,15 @@ export function GardenSection({
                                   </View>
                                 ))}
                               </View>
+                              {gameContext?.emojiGameStats[blendDefinition.id]?.checkersGamesPlayed ? (
+                                <View style={styles.emojiStatsGames}>
+                                  <Text style={styles.emojiStatsGameLabel}>Checkers</Text>
+                                  <View style={styles.emojiStatsGameRow}>
+                                    <Text style={styles.emojiStatsGameValue}>{gameContext.emojiGameStats[blendDefinition.id].checkersWins || 0} wins</Text>
+                                    <Text style={styles.emojiStatsGameValue}>{gameContext.emojiGameStats[blendDefinition.id].checkersGamesPlayed || 0} games</Text>
+                                  </View>
+                                </View>
+                              ) : null}
                             </View>
                           </View>
                         );
@@ -5112,6 +5109,27 @@ const styles = StyleSheet.create({
   emojiStatsTagText: {
     fontSize: 12,
     color: '#166534',
+    fontWeight: '600',
+  },
+  emojiStatsGames: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    gap: 8,
+  },
+  emojiStatsGameLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065f46',
+  },
+  emojiStatsGameRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  emojiStatsGameValue: {
+    fontSize: 12,
+    color: '#047857',
     fontWeight: '600',
   },
   editNameContainer: {

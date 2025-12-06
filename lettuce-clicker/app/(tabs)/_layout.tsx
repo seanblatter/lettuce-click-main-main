@@ -1,8 +1,9 @@
 import { Tabs } from 'expo-router';
 import React, { useMemo } from 'react';
-import { Text } from 'react-native';
+import { Text, Platform } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
+import { HomeIcon, PineTreeIcon, EnergyIcon } from '@/components/TabIcons';
 import { Colors } from '@/constants/theme';
 import { useGame } from '@/context/GameContext';
 import type { HomeEmojiTheme } from '@/context/GameContext';
@@ -111,32 +112,43 @@ export default function TabLayout() {
       initialRouteName="garden"
       screenOptions={{
         tabBarActiveTintColor: baseAccent,
-        tabBarInactiveTintColor: inactiveAccent,
+        tabBarInactiveTintColor: colorScheme === 'dark' 
+          ? 'rgba(235, 235, 245, 0.6)' 
+          : 'rgba(60, 60, 67, 0.6)',
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '700',
-          letterSpacing: 0.35,
-          textTransform: 'uppercase',
-          textShadowColor: 'rgba(15, 23, 42, 0.35)',
-          textShadowOffset: { width: 0, height: 1 },
-          textShadowRadius: 2,
+          fontSize: 10,
+          fontWeight: '500',
+          letterSpacing: 0.05,
+          marginTop: 3,
         },
         tabBarAllowFontScaling: false,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: isExpandedView ? { display: 'none' } : {
-          backgroundColor: tabBackground,
-          borderTopColor: tabBorder,
-          borderTopWidth: 1,
-          height: 78,
+          position: 'absolute',
+          bottom: Platform.OS === 'ios' ? 20 : 16,
+          marginHorizontal: '8%',
+          backgroundColor: colorScheme === 'dark' 
+            ? 'rgba(20, 20, 20, 0.65)' 
+            : 'rgba(255, 255, 255, 0.55)',
+          borderRadius: 36,
+          borderWidth: 0.5,
+          borderColor: colorScheme === 'dark'
+            ? 'rgba(255, 255, 255, 0.18)'
+            : 'rgba(0, 0, 0, 0.08)',
+          height: 76,
           paddingTop: 12,
-          paddingBottom: 16,
-          marginBottom: 8,
-          shadowColor: 'rgba(15, 23, 42, 0.18)',
-          shadowOpacity: 0.18,
-          shadowRadius: 18,
-          shadowOffset: { width: 0, height: -4 },
-          elevation: 8,
+          paddingBottom: 12,
+          paddingHorizontal: 20,
+          shadowColor: colorScheme === 'dark' 
+            ? 'rgba(0, 0, 0, 0.9)' 
+            : 'rgba(0, 0, 0, 0.2)',
+          shadowOpacity: 1,
+          shadowRadius: 32,
+          shadowOffset: { width: 0, height: 12 },
+          elevation: 20,
+          overflow: 'hidden',
+          backdropFilter: 'blur(64px) saturate(200%)',
         },
       }}
     >
@@ -144,21 +156,21 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 22, color }}>🏠</Text>,
+          tabBarIcon: ({ color }) => <HomeIcon color={color} size={22} />,
         }}
       />
       <Tabs.Screen
         name="garden"
         options={{
           title: 'Garden',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 22, color }}>🌲</Text>,
+          tabBarIcon: ({ color }) => <PineTreeIcon color={color} size={22} />,
         }}
       />
       <Tabs.Screen
         name="upgrades"
         options={{
           title: 'Upgrades',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 22, color }}>⚡️</Text>,
+          tabBarIcon: ({ color }) => <EnergyIcon color={color} size={22} />,
         }}
       />
     </Tabs>
