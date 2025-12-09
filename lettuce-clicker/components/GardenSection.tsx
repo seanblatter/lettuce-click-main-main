@@ -1187,18 +1187,18 @@ export function GardenSection({
       await MediaLibrary.saveToLibraryAsync(snapshotUri);
       Alert.alert(
         'Garden saved',
-        'Your garden snapshot is now in your photos. Would you like to add it to your Widget Promenade for widgets?',
+        'Your garden snapshot is now in your photos. Would you like to add it to your Digital Promenade?',
         [
           {
             text: 'Photos only',
             style: 'cancel',
           },
           {
-            text: 'Add to Promenade',
+            text: 'Add to Digital Promenade',
             onPress: () => {
               const entry = addWidgetPromenadePhoto(snapshotUri);
               if (entry) {
-                Alert.alert('Widget ready', 'Your snapshot is ready in the Widget Promenade.');
+                Alert.alert('Saved to Digital Promenade', 'Your snapshot is ready to view and share from your Digital Promenade.');
               }
             },
           },
@@ -1254,6 +1254,20 @@ export function GardenSection({
       setIsPickingPhoto(false);
     }
   }, [addPhotoPlacement, getCanvasCenter, isPickingPhoto, setShowPalette]);
+
+  // Filter out emojis from text input
+  const handleTextInputChange = useCallback((text: string) => {
+    // Remove emoji characters - matches all emoji patterns including:
+    // - Basic emoji
+    // - Emoji with skin tone modifiers
+    // - Zero-width joiners (combined emoji)
+    // - Variation selectors
+    const filteredText = text.replace(
+      /[\p{Emoji_Presentation}\p{Extended_Pictographic}](?:[\p{Emoji_Modifier}]|[\u{200D}][\p{Emoji_Presentation}\p{Extended_Pictographic}])*[\uFE0E\uFE0F]?/gu,
+      ''
+    );
+    setTextDraft(filteredText);
+  }, []);
 
   const handleAddText = useCallback(() => {
     const trimmed = textDraft.replace(/\n+/g, ' ').trim();
@@ -2183,7 +2197,7 @@ export function GardenSection({
                   <TextInput
                     style={styles.textComposerInput}
                     value={textDraft}
-                    onChangeText={setTextDraft}
+                    onChangeText={handleTextInputChange}
                     placeholder="Write a garden note"
                     placeholderTextColor="#4a5568"
                     multiline
@@ -3080,7 +3094,7 @@ function InventoryTileItem({
   }, [shouldShake, wiggle]);
 
   const longPressGesture = Gesture.LongPress()
-    .minDuration(400)
+    .minDuration(Platform.OS === 'android' ? 350 : 400)
     .onStart(() => {
       console.log('🔄 Long press gesture triggered for:', item.name);
       
@@ -3131,9 +3145,12 @@ function InventoryTileItem({
       }
       runOnJS(endDrag)();
     })
-    .enabled(canReorder);
+    .enabled(canReorder)
+    .shouldCancelWhenOutside(true);
 
-  const combinedGesture = Gesture.Simultaneous(longPressGesture, panGesture);
+  const combinedGesture = canReorder 
+    ? Gesture.Simultaneous(longPressGesture, panGesture)
+    : longPressGesture;
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ rotateZ: `${wiggle.value}deg` }, { scale: scale.value }],

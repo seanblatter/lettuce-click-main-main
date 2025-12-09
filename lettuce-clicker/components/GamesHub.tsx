@@ -24,6 +24,7 @@ interface GamesHubProps {
   customEmojiNames: Record<string, string>;
   hasPremiumUpgrade?: boolean;
   onPurchasePremium?: () => void;
+  backgroundColor?: string;
 }
 
 type GameScreen = 'hub' | 'flappy-lettuce' | 'lettuce-slicer' | 'lettuce-hop';
@@ -35,7 +36,7 @@ interface EmojiItem {
   name?: string;
 }
 
-export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog, customEmojiNames, hasPremiumUpgrade = false, onPurchasePremium }: GamesHubProps) {
+export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog, customEmojiNames, hasPremiumUpgrade = false, onPurchasePremium, backgroundColor = '#f0fdf4' }: GamesHubProps) {
   const [currentScreen, setCurrentScreen] = useState<GameScreen>('hub');
   const [selectedEmoji, setSelectedEmoji] = useState<EmojiItem>({ emoji: '🥬' });
 
@@ -137,7 +138,7 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
       presentationStyle="fullScreen"
       onRequestClose={onRequestClose}
     >
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor }]}>
         {currentScreen === 'hub' ? (
           <View style={styles.hubContainer}>
             <View style={styles.header}>
@@ -323,7 +324,6 @@ export function GamesHub({ visible, onRequestClose, emojiInventory, emojiCatalog
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f0fdf4',
   },
   hubContainer: {
     flex: 1,
@@ -346,14 +346,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#dcfce7',
+    backgroundColor: 'rgba(31, 111, 74, 0.1)',
     borderWidth: 1,
-    borderColor: '#86efac',
+    borderColor: 'rgba(31, 111, 74, 0.18)',
   },
   closeText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#065f46',
+    color: '#1f6f4a',
   },
   subtitle: {
     fontSize: 16,

@@ -26,3 +26,10 @@ export const EnergyIcon: React.FC<IconProps> = ({ size = 26 }) => (
     style={{ width: size, height: size, resizeMode: 'contain' }}
   />
 );
+
+export const LettuceIcon: React.FC<IconProps> = ({ size = 22 }) => (
+  <Image
+    source={require('../assets/images/lettuce.png')}
+    style={{ width: size, height: size, resizeMode: 'contain' }}
+  />
+);

@@ -254,9 +254,9 @@ const DARK_PALETTE: Palette = {
 
 const LIGHT_PALETTE: Palette = {
   background: '#f6fbf7',
-  headerBackBackground: '#e1f3e7',
-  headerBackBorder: '#bfe5d3',
-  headerBackText: '#1f7a53',
+  headerBackBackground: 'rgba(31, 111, 74, 0.1)',
+  headerBackBorder: 'rgba(31, 111, 74, 0.18)',
+  headerBackText: '#1f6f4a',
   headerTitle: '#0f3d2b',
   actionButtonBackground: '#ffffff',
   actionButtonBorder: '#caead9',
@@ -440,8 +440,8 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
     nowPlayingCard: {
       backgroundColor: palette.cardBackground,
       borderRadius: 28,
-      padding: 24,
-      gap: 18,
+      padding: 16,
+      gap: 12,
       borderWidth: 1,
       borderColor: palette.cardBorder,
       shadowColor: palette.cardShadow,
@@ -454,92 +454,93 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+      gap: 8,
     },
     nowPlayingLabel: {
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '700',
       color: palette.nowPlayingLabel,
-      letterSpacing: 1,
+      letterSpacing: 0.5,
       textTransform: 'uppercase',
     },
     nowPlayingMeta: {
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '600',
       color: palette.nowPlayingMeta,
     },
     nowPlayingRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 18,
+      gap: 12,
     },
     nowPlayingEmojiWrap: {
-      width: 72,
-      height: 72,
-      borderRadius: 36,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'visible',
     },
     nowPlayingEmojiStatic: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       backgroundColor: palette.nowPlayingEmojiBackground,
       alignItems: 'center',
       justifyContent: 'center',
     },
     nowPlayingEmoji: {
-      fontSize: 34,
+      fontSize: 28,
     },
     nowPlayingBody: {
       flex: 1,
-      gap: 6,
+      gap: 4,
     },
     nowPlayingTitle: {
-      fontSize: 20,
+      fontSize: 16,
       fontWeight: '800',
       color: palette.nowPlayingTitle,
     },
     nowPlayingSubtitle: {
-      fontSize: 13,
-      lineHeight: 18,
+      fontSize: 12,
+      lineHeight: 16,
       color: palette.nowPlayingSubtitle,
     },
     sleepStatusBlock: {
-      gap: 4,
-      padding: 12,
-      borderRadius: 16,
+      gap: 2,
+      padding: 10,
+      borderRadius: 12,
       backgroundColor: palette.sleepStatusBackground,
       borderWidth: 1,
       borderColor: palette.sleepStatusBorder,
     },
     sleepStatusLabel: {
-      fontSize: 11,
+      fontSize: 10,
       fontWeight: '700',
       color: palette.sleepStatusLabel,
-      letterSpacing: 0.8,
+      letterSpacing: 0.5,
       textTransform: 'uppercase',
     },
     sleepStatusBlockHeadline: {
-      fontSize: 13,
+      fontSize: 12,
       fontWeight: '600',
       color: palette.sleepStatusHeadline,
     },
     sleepStatusWarning: {
-      fontSize: 11,
+      fontSize: 10,
       color: palette.sleepStatusWarning,
     },
     nowPlayingControls: {
-      marginTop: 12,
+      marginTop: 8,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 16,
+      gap: 12,
     },
     nowPlayingControlButton: {
-      width: 54,
-      height: 54,
-      borderRadius: 27,
+      width: 48,
+      height: 48,
+      borderRadius: 24,
       borderWidth: 2,
       borderColor: palette.nowPlayingControlBorder,
       backgroundColor: palette.nowPlayingControlBackground,
@@ -552,9 +553,9 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       elevation: isDark ? 5 : 2,
     },
     nowPlayingControlButtonPrimary: {
-      width: 68,
-      height: 68,
-      borderRadius: 34,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       borderWidth: 2.5,
     },
     nowPlayingControlButtonActive: {
@@ -566,8 +567,8 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       transform: [{ scale: 1.08 }],
     },
     nowPlayingPrimaryIconWrap: {
-      width: 40,
-      height: 40,
+      width: 32,
+      height: 32,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -575,13 +576,13 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       marginLeft: 2,
     },
     sleepProgressWrapper: {
-      marginTop: 10,
+      marginTop: 6,
       width: '100%',
-      paddingHorizontal: 8,
+      paddingHorizontal: 4,
     },
     sleepProgressTrack: {
       width: '100%',
-      height: 6,
+      height: 4,
       borderRadius: 999,
       backgroundColor: palette.sleepTimerBorder,
       overflow: 'hidden',
@@ -590,6 +591,46 @@ const createStyles = (palette: Palette, isDark: boolean, sleepSheetMaxHeight: nu
       height: '100%',
       borderRadius: 999,
       backgroundColor: palette.sleepTimerBackgroundActive,
+    },
+    timerRingsContainer: {
+      flexDirection: 'row',
+      marginTop: 12,
+      justifyContent: 'center',
+      gap: 16,
+    },
+    timerRing: {
+      alignItems: 'center',
+      gap: 4,
+    },
+    timerRingLabel: {
+      fontSize: 10,
+      fontWeight: '500',
+      color: palette.sleepTimerText,
+    },
+    timerRingCircle: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      borderWidth: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    timerRingValue: {
+      fontSize: 20,
+      fontWeight: 'bold',
+    },
+    sleepTimerDisplay: {
+      alignItems: 'center',
+      gap: 2,
+      paddingVertical: 4,
+    },
+    sleepTimerHeadline: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    sleepTimerDetail: {
+      fontSize: 11,
+      fontWeight: '500',
     },
     groupSection: {
       gap: 14,
@@ -1432,6 +1473,28 @@ export function MusicContent({ mode = 'screen', onRequestClose, hasPremiumUpgrad
     return Math.min(Math.max(elapsed / totalAlarmMs, 0), 1);
   }, [sleepCircle, sleepNow]);
 
+  // Calculate remaining time in hours and minutes for dream capsule timer display
+  const timerDisplay = useMemo(() => {
+    if (!sleepCircle || sleepCircle.mode !== 'timer') {
+      return null;
+    }
+
+    const remainingMs = sleepCircle.targetTimestamp - sleepNow;
+    const remainingSeconds = Math.max(Math.ceil(remainingMs / 1000), 0);
+    
+    const hours = Math.floor(remainingSeconds / 3600);
+    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+    const seconds = remainingSeconds % 60;
+
+    return {
+      hours,
+      minutes,
+      seconds,
+      totalSeconds: remainingSeconds,
+      displayText: `${hours}h ${minutes}m`,
+    };
+  }, [sleepCircle, sleepNow]);
+
   const handleSleepComplete = useCallback(
     async (state: Exclude<SleepCircleState, null>) => {
       setSleepCircle(null);
@@ -1812,6 +1875,16 @@ export function MusicContent({ mode = 'screen', onRequestClose, hasPremiumUpgrad
                     )}
                   </Pressable>
                 </View>
+                {sleepCircle && sleepSummary ? (
+                  <View style={styles.sleepTimerDisplay}>
+                    <Text style={[styles.sleepTimerHeadline, { color: palette.sleepTimerTextActive }]}>
+                      {sleepSummary.headline}
+                    </Text>
+                    <Text style={[styles.sleepTimerDetail, { color: palette.sleepTimerText }]}>
+                      {sleepSummary.detail}
+                    </Text>
+                  </View>
+                ) : null}
                 {sleepProgress !== null ? (
                   <View
                     style={styles.sleepProgressWrapper}

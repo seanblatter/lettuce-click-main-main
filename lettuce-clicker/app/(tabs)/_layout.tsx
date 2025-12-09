@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { Text, Platform } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
-import { HomeIcon, PineTreeIcon, EnergyIcon } from '@/components/TabIcons';
+import { HomeIcon, PineTreeIcon, EnergyIcon, LettuceIcon } from '@/components/TabIcons';
 import { Colors } from '@/constants/theme';
 import { useGame } from '@/context/GameContext';
 import type { HomeEmojiTheme } from '@/context/GameContext';
@@ -157,6 +157,13 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color }) => <HomeIcon color={color} size={22} />,
+        }}
+      />
+      <Tabs.Screen
+        name="lettuce"
+        options={{
+          title: 'Lettuce',
+          tabBarIcon: ({ color }) => <LettuceIcon color={color} size={22} />,
         }}
       />
       <Tabs.Screen

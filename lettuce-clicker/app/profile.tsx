@@ -538,9 +538,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   }
 
   // Continue to the main screen render below
-
-// ...existing code...
-
+  return (
     <SafeAreaView style={containerStyle}>
       <ScrollView
         contentContainerStyle={contentStyle}
@@ -557,41 +555,44 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
           </Pressable>
         </View>
 
-        <View style={styles.formSection}>
-          <Text style={styles.sectionLabel}>Display name</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Your name"
-            style={styles.input}
-            returnKeyType="done"
-          />
-        </View>
+        {/* Hidden sections - only show Garden Plus Customization */}
+        {false && <>
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Display name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Your name"
+              style={styles.input}
+              returnKeyType="done"
+            />
+          </View>
 
-        <View style={styles.formSection}>
-          <Text style={styles.sectionLabel}>Username</Text>
-          <TextInput
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder="@lettuce-lover"
-            style={styles.input}
-            returnKeyType="done"
-          />
-        </View>
+          <View style={styles.formSection}>
+            <Text style={styles.sectionLabel}>Username</Text>
+            <TextInput
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="@lettuce-lover"
+              style={styles.input}
+              returnKeyType="done"
+            />
+          </View>
 
-        <View style={styles.statsCard}>
-          <Text style={styles.statsTitle}>Lifetime harvest</Text>
-          <Text style={styles.statsValue}>{profileLifetimeTotal.toLocaleString()}</Text>
-          <Text style={styles.statsCopy}>
-            This is the sum of every harvest you’ve collected across all sessions. Keep playing to grow
-            your lifetime score.
-          </Text>
-        </View>
+          <View style={styles.statsCard}>
+            <Text style={styles.statsTitle}>Lifetime harvest</Text>
+            <Text style={styles.statsValue}>{profileLifetimeTotal.toLocaleString()}</Text>
+            <Text style={styles.statsCopy}>
+              This is the sum of every harvest you've collected across all sessions. Keep playing to grow
+              your lifetime score.
+            </Text>
+          </View>
+        </>}
 
         <View style={styles.upgradeCard}>
-          <Text style={styles.upgradeTitle}>Garden Plus customization</Text>
+          <Text style={styles.upgradeTitle}>Garden Plus Customization</Text>
           {hasPremiumUpgrade ? (
             <>
               <Text style={styles.upgradeCopy}>Choose an accent color for your click target.</Text>
@@ -702,26 +703,30 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
           )}
         </View>
 
-        <Pressable
-          style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-          onPress={handleSaveProfile}
-          disabled={isSaving}
-        >
-          <Text style={styles.saveButtonText}>{isSaving ? 'Saving…' : 'Save profile'}</Text>
-        </Pressable>
-        <Pressable
-          style={styles.resetButton}
-          onPress={() => {
-            Alert.alert('Reset game', 'Reset all game data and simulate a fresh install?', [
-              { text: 'Cancel', style: 'cancel' },
-              { text: 'Reset', style: 'destructive', onPress: () => resetGame() },
-            ]);
-          }}
-        >
-          <Text style={styles.resetButtonText}>Reset to new user</Text>
-        </Pressable>
+        {/* Hidden save and reset buttons */}
+        {false && <>
+          <Pressable
+            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+            onPress={handleSaveProfile}
+            disabled={isSaving}
+          >
+            <Text style={styles.saveButtonText}>{isSaving ? 'Saving…' : 'Save profile'}</Text>
+          </Pressable>
+          <Pressable
+            style={styles.resetButton}
+            onPress={() => {
+              Alert.alert('Reset game', 'Reset all game data and simulate a fresh install?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Reset', style: 'destructive', onPress: () => resetGame() },
+              ]);
+            }}
+          >
+            <Text style={styles.resetButtonText}>Reset to new user</Text>
+          </Pressable>
+        </>}
       </ScrollView>
     </SafeAreaView>
+  );
 }
 
 export default function ProfileScreen() {
@@ -740,7 +745,7 @@ const createResponsiveStyles = (isLandscape: boolean, isDarkTheme: boolean = fal
     gap: isLandscape ? 20 : 24,
   },
   topBar: {
-    marginBottom: 8,
+    marginBottom: 12,
     alignItems: 'flex-start',
   },
   backButton: {
@@ -758,12 +763,14 @@ const createResponsiveStyles = (isLandscape: boolean, isDarkTheme: boolean = fal
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 16,
-    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.1)' : 'rgba(22, 101, 52, 0.14)',
+    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.1)' : 'rgba(31, 111, 74, 0.1)',
+    borderWidth: 1,
+    borderColor: isDarkTheme ? 'rgba(255, 255, 255, 0.18)' : 'rgba(31, 111, 74, 0.18)',
   },
   modalBackLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: isDarkTheme ? '#86efac' : '#14532d',
+    color: isDarkTheme ? '#f0fdf4' : '#1f6f4a',
   },
   headerCard: {
     backgroundColor: '#22543d',
@@ -932,19 +939,17 @@ const createResponsiveStyles = (isLandscape: boolean, isDarkTheme: boolean = fal
     lineHeight: 20,
   },
   upgradeCard: {
-    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.08)' : '#f0fff4',
-    borderRadius: 20,
+    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.12)' : 'rgba(31, 111, 74, 0.08)',
+    borderRadius: 24,
     padding: 20,
     gap: 16,
-    shadowColor: isDarkTheme ? '#000000' : '#0f766e',
-    shadowOpacity: isDarkTheme ? 0.3 : 0.1,
+    borderWidth: 1,
+    borderColor: isDarkTheme ? 'rgba(255, 255, 255, 0.15)' : 'rgba(31, 111, 74, 0.15)',
+    shadowColor: isDarkTheme ? '#000000' : '#0f2e20',
+    shadowOpacity: isDarkTheme ? 0.3 : 0.08,
     shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-    ...(isDarkTheme && {
-      borderWidth: 1,
-      borderColor: 'rgba(255, 255, 255, 0.12)',
-    }),
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   upgradeTitle: {
     fontSize: 18,
@@ -1170,12 +1175,12 @@ const createResponsiveStyles = (isLandscape: boolean, isDarkTheme: boolean = fal
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
-    paddingTop: 16,
+    paddingTop: 12,
     shadowColor: isDarkTheme ? '#000000' : '#0f2e20',
     shadowOpacity: isDarkTheme ? 0.5 : 0.18,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: -2 },
-    height: '90%',
+    height: '100%',
     alignSelf: 'center',
     width: '100%',
     ...(isDarkTheme && {
@@ -1191,13 +1196,13 @@ const createResponsiveStyles = (isLandscape: boolean, isDarkTheme: boolean = fal
     height: 5,
     borderRadius: 999,
     backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : '#bbf7d0',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   modalScrollView: {
     flex: 1,
   },
   modalScrollContent: {
-    gap: 20,
+    gap: 12,
     paddingBottom: 40,
   },
   widgetToggleContainer: {

@@ -47,7 +47,7 @@ type ProviderProps = {
 };
 
 export function AmbientAudioProvider({ children }: ProviderProps) {
-  const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>(MUSIC_OPTIONS[0].id);
+  const [selectedTrackId, setSelectedTrackId] = useState<MusicOption['id']>('forest-twilight');
   const [error, setError] = useState<Error | null>(null);
   const [volume, setVolumeState] = useState<number>(0.7); // Default volume 70%
   const [sleepCircle, setSleepCircle] = useState<SleepCircleState>(null);
@@ -252,6 +252,41 @@ export function AmbientAudioProvider({ children }: ProviderProps) {
       console.warn('Failed to play alarm', error);
     }
   }, [alarmPlayer]);
+
+  // Monitor sleep circle countdown and trigger alarm when time is up
+  useEffect(() => {
+    if (!sleepCircle || isAlarmRinging) return;
+
+    const checkAlarmTrigger = () => {
+      const now = Date.now();
+
+      if (sleepCircle.mode === 'timer') {
+        // Timer mode: check if targetTimestamp has been reached
+        if (now >= sleepCircle.targetTimestamp && sleepCircle.action === 'alarm') {
+          console.log('⏰ Timer countdown complete, triggering alarm');
+          triggerAlarm();
+        } else if (now >= sleepCircle.targetTimestamp && sleepCircle.action === 'stop') {
+          console.log('⏸️ Timer countdown complete, pausing music');
+          setSleepCircle(null);
+          pause();
+        }
+      } else if (sleepCircle.mode === 'alarm') {
+        // Alarm mode: check if fireTimestamp has been reached
+        if (now >= sleepCircle.fireTimestamp) {
+          console.log('🔔 Alarm time reached, triggering alarm');
+          triggerAlarm();
+        }
+      }
+    };
+
+    // Check immediately in case alarm time has already passed
+    checkAlarmTrigger();
+
+    // Then check every 500ms to catch the moment the alarm should fire
+    const interval = setInterval(checkAlarmTrigger, 500);
+
+    return () => clearInterval(interval);
+  }, [sleepCircle, isAlarmRinging, triggerAlarm, pause]);
 
   const value = useMemo(
     () => ({

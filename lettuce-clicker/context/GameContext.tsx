@@ -99,6 +99,7 @@ export type WidgetPromenadeEntry = {
   id: string;
   uri: string;
   savedAt: number;
+  title?: string;
 };
 
 type ResumeNoticeBase = {
@@ -209,6 +210,7 @@ type GameContextValue = {
   clearResumeNotice: () => void;
   addWidgetPromenadePhoto: (uri: string) => WidgetPromenadeEntry | null;
   removeWidgetPromenadePhoto: (entryId: string) => void;
+  updateWidgetPromenadeTitle: (entryId: string, title: string) => void;
   resetGame: () => Promise<void>;
 };
 
@@ -946,6 +948,14 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
           return;
         }
 
+        // Only show "While You Were Away" notice if app was idle for at least 5 minutes
+        const MIN_IDLE_TIME_MS = 5 * 60 * 1000; // 5 minutes
+        const elapsedTimeMs = Date.now() - info.timestamp;
+        
+        if (elapsedTimeMs < MIN_IDLE_TIME_MS) {
+          return;
+        }
+
         const elapsedSeconds = Math.max(Math.floor((Date.now() - info.timestamp) / 1000), 0);
         const passiveHarvest = elapsedSeconds * Math.max(info.autoPerSecond, 0);
         const greetings = ['Hi', 'Howdy', "What's Up", 'Hello'] as const;
@@ -1432,6 +1442,14 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     setWidgetPromenade((prev) => prev.filter((item) => item.id !== entryId));
   }, []);
 
+  const updateWidgetPromenadeTitle = useCallback((entryId: string, title: string) => {
+    setWidgetPromenade((prev) =>
+      prev.map((item) =>
+        item.id === entryId ? { ...item, title: title.trim() || undefined } : item
+      )
+    );
+  }, []);
+
   useEffect(() => {
     if (ownedThemes[homeEmojiTheme]) {
       return;
@@ -1571,6 +1589,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     },
     addWidgetPromenadePhoto,
     removeWidgetPromenadePhoto,
+    updateWidgetPromenadeTitle,
   }), [
     isLoading,
     harvest,
@@ -1626,6 +1645,7 @@ export const GameProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     emojiGameStats,
     addWidgetPromenadePhoto,
     removeWidgetPromenadePhoto,
+    updateWidgetPromenadeTitle,
     customEmojiNames,
     setCustomEmojiName,
     updateFlappyEmojiStats,

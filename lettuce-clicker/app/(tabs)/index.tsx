@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import * as MediaLibrary from 'expo-media-library';
 import {
   Alert,
   Animated,
@@ -8,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
   GestureResponderEvent,
   Image,
@@ -18,7 +20,7 @@ import {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedProps, runOnJS, FadeInDown, FadeOutUp, withTiming, withRepeat, withSequence, Easing } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 
 import { OrbitingUpgradeEmojis } from '@/components/OrbitingUpgradeEmojis';
@@ -195,6 +197,7 @@ export default function HomeScreen() {
     clearRSSData,
     widgetPromenade,
     removeWidgetPromenadePhoto,
+    updateWidgetPromenadeTitle,
   } = useGame();
 
   // Get current theme for background emoji
@@ -218,6 +221,11 @@ export default function HomeScreen() {
   const [showGamesHub, setShowGamesHub] = useState(false);
   // Add state for selected widget promenade entry
   const [selectedWidgetPromenadeId, setSelectedWidgetPromenadeId] = useState<string | null>(null);
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [editingTitleText, setEditingTitleText] = useState('');
+
+  // Get search params to listen for Daily Bonus spin trigger from Lettuce tab
+  const searchParams = useLocalSearchParams();
 
   // Load selected ID from storage on mount
   useEffect(() => {
@@ -225,6 +233,16 @@ export default function HomeScreen() {
       if (id) setSelectedWidgetPromenadeId(id);
     });
   }, []);
+
+  // Listen for spin trigger from Lettuce tab
+  useEffect(() => {
+    if (searchParams?.triggerDailyBonusSpin === 'true') {
+      // Show Daily Bonus modal when triggered from Lettuce tab
+      setShowDailyBonus(true);
+      // Clear the param so it doesn't trigger again
+      router.setParams({ triggerDailyBonusSpin: undefined });
+    }
+  }, [searchParams?.triggerDailyBonusSpin]);
 
   // Save widget selection to App Group for iOS widget
   const saveWidgetArtworkToAppGroup = async (artwork: string) => {
@@ -521,6 +539,79 @@ export default function HomeScreen() {
       totalAlarmMs
     );
     return Math.min(Math.max(elapsed / totalAlarmMs, 0), 1);
+  }, [sleepCircle, sleepNow]);
+
+  // Calculate sleep summary for display (headline and detail text)
+  const sleepSummary = useMemo(() => {
+    if (!sleepCircle) {
+      return null;
+    }
+
+    if (sleepCircle.mode === 'timer') {
+      const remainingMs = sleepCircle.targetTimestamp - sleepNow;
+
+      if (remainingMs <= 0) {
+        return {
+          headline: 'Timer · ready',
+          detail: sleepCircle.action === 'alarm' ? 'Alarm standing by' : 'Awaiting next session',
+        };
+      }
+
+      const minutes = Math.ceil(remainingMs / 60000);
+      const detailPrefix = sleepCircle.action === 'alarm' ? 'Alarm in' : 'Stops in';
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      const timeStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+      
+      return {
+        headline: `Timer · ${timeStr}`,
+        detail: `${detailPrefix} ${timeStr}`,
+      };
+    }
+
+    // Alarm mode
+    const remainingMs = sleepCircle.fireTimestamp - sleepNow;
+    const hour12 = sleepCircle.hour % 12 || 12;
+    const timeStr = `${hour12}:${String(sleepCircle.minute).padStart(2, '0')} ${sleepCircle.period}`;
+
+    if (remainingMs <= 0) {
+      return {
+        headline: `Alarm · ${timeStr}`,
+        detail: 'Ringing now',
+      };
+    }
+
+    const minutes = Math.ceil(remainingMs / 60000);
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const timeStr2 = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+    return {
+      headline: `Alarm · ${timeStr}`,
+      detail: `Rings in ${timeStr2}`,
+    };
+  }, [sleepCircle, sleepNow]);
+
+  // Calculate remaining time in hours and minutes for dream capsule timer display
+  const timerDisplay = useMemo(() => {
+    if (!sleepCircle || sleepCircle.mode !== 'timer') {
+      return null;
+    }
+
+    const remainingMs = sleepCircle.targetTimestamp - sleepNow;
+    const remainingSeconds = Math.max(Math.ceil(remainingMs / 1000), 0);
+    
+    const hours = Math.floor(remainingSeconds / 3600);
+    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+    const seconds = remainingSeconds % 60;
+
+    return {
+      hours,
+      minutes,
+      seconds,
+      totalSeconds: remainingSeconds,
+      displayText: `${hours}h ${minutes}m`,
+    };
   }, [sleepCircle, sleepNow]);
 
   // Just toggle playback without setting timer (timer is set in Music Lounge)
@@ -852,6 +943,44 @@ export default function HomeScreen() {
     },
     [removeWidgetPromenadePhoto]
   );
+
+  const handleStartEditTitle = useCallback((entryId: string, currentTitle: string | undefined) => {
+    setEditingTitleId(entryId);
+    setEditingTitleText(currentTitle || '');
+  }, []);
+
+  const handleSaveTitle = useCallback(() => {
+    if (editingTitleId) {
+      updateWidgetPromenadeTitle(editingTitleId, editingTitleText);
+      setEditingTitleId(null);
+      setEditingTitleText('');
+    }
+  }, [editingTitleId, editingTitleText, updateWidgetPromenadeTitle]);
+
+  const handleCancelEditTitle = useCallback(() => {
+    setEditingTitleId(null);
+    setEditingTitleText('');
+  }, []);
+
+  const handleSaveArtworkToDevice = useCallback(async (uri: string, title?: string) => {
+    try {
+      // Request media library permissions
+      const permission = await MediaLibrary.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission denied', 'Please enable photo library access to save artwork.');
+        return;
+      }
+
+      // Save to media library
+      await MediaLibrary.saveToLibraryAsync(uri);
+      
+      const displayTitle = title ? `"${title}"` : 'Artwork';
+      Alert.alert('Saved!', `${displayTitle} has been saved to your device.`);
+    } catch (error) {
+      console.error('Failed to save artwork:', error);
+      Alert.alert('Save failed', 'We could not save the artwork. Please try again.');
+    }
+  }, []);
 
   const handleOpenDreamCapsule = useCallback(() => {
     setMenuOpen(false);
@@ -1250,7 +1379,7 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                   <View style={styles.statRow}>
-                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Available Harvest</Text>
+                    <Text style={[styles.statLabel, { color: ledgerTheme.muted }]}>Lettuce Harvest</Text>
                     <Text style={[
                       styles.statValue, 
                       { 
@@ -1431,6 +1560,18 @@ export default function HomeScreen() {
                     </Pressable>
                   </View>
                   
+                  {/* Sleep Timer Display */}
+                  {sleepCircle && sleepSummary ? (
+                    <View style={styles.dreamCapsuleSleepDisplay}>
+                      <Text style={[styles.dreamCapsuleSleepHeadline, { color: ledgerTheme.tint }]}>
+                        {sleepSummary.headline}
+                      </Text>
+                      <Text style={[styles.dreamCapsuleSleepDetail, { color: ledgerTheme.muted }]}>
+                        {sleepSummary.detail}
+                      </Text>
+                    </View>
+                  ) : null}
+                  
                   {/* Progress Bar */}
                   {sleepProgress !== null ? (
                     <View
@@ -1468,23 +1609,6 @@ export default function HomeScreen() {
         </View>
         </Pressable>
       </View>
-      
-      {/* Bottom menu button */}
-      <Pressable
-        accessibilityLabel={menuOpen ? 'Close garden menu' : 'Open garden menu'}
-        accessibilityHint={menuOpen ? undefined : 'Opens actions and emoji theme options'}
-        style={({ pressed }) => [
-          styles.bottomMenuButton,
-          pressed && styles.menuButtonPressed,
-        ]}
-        onPress={() => setMenuOpen((prev) => !prev)}>
-        <Text style={[
-          styles.menuIcon,
-          menuOpen && styles.menuIconActive
-        ]}>
-          {menuOpen ? '✕' : customClickEmoji}
-        </Text>
-      </Pressable>
     </SafeAreaView>
 
         <Modal
@@ -1576,7 +1700,7 @@ export default function HomeScreen() {
                       ]}
                       onPress={handleOpenWidgetPromenade}
                       accessibilityRole="button"
-                      accessibilityLabel="Open Widget Promenade"
+                      accessibilityLabel="Open Promenade Gallery"
                     >
                       <Pressable
                         style={styles.quickActionIconPressable}
@@ -1596,7 +1720,7 @@ export default function HomeScreen() {
                         </Animated.View>
                       </Pressable>
                       <View style={styles.menuItemBody}>
-                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Widget Promenade</Text>
+                        <Text style={[styles.menuItemTitle, styles.quickActionTitle]}>Promenade Gallery</Text>
                         <Text style={[styles.menuItemSubtitle, styles.quickActionSubtitle]}>
                           Showcase saved garden photos
                         </Text>
@@ -1759,14 +1883,15 @@ export default function HomeScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Grow your park</Text>
+            <View style={styles.modalIconContainer}>
+              <Text style={styles.modalIcon}>🥬</Text>
+            </View>
+            <Text style={styles.modalTitle}>Grow and Harvest</Text>
             <Text style={styles.modalCopy}>
-              Spend harvest on upgrades to unlock faster auto clicks and stronger tap values. Visit the
-              Upgrades tab to power up, then bring your harvest to the Garden tab to decorate your
-              dream park.
+              Grow and harvest your lettuce to spend on your garden.
             </Text>
             <Pressable accessibilityLabel="Close grow your park message" style={styles.modalButton} onPress={handleDismissGrow}>
-              <Text style={styles.modalButtonText}>Start growing</Text>
+              <Text style={styles.modalButtonText}>Start Growing 🌱</Text>
             </Pressable>
           </View>
         </View>
@@ -1944,17 +2069,17 @@ export default function HomeScreen() {
         <SafeAreaView style={styles.promenadeSafeArea}>
           <View style={[styles.promenadeContainer, { paddingTop: insets.top + 24 }]}> 
             <View style={styles.promenadeHeader}>
-              <Text style={styles.promenadeTitle}>Widget Promenade</Text>
+              <Text style={styles.promenadeTitle}>Promenade Gallery</Text>
               <Pressable
                 style={styles.promenadeCloseButton}
                 onPress={handleCloseWidgetPromenade}
-                accessibilityLabel="Close Widget Promenade"
+                accessibilityLabel="Close Promenade Gallery"
               >
                 <Text style={styles.promenadeCloseText}>Done</Text>
               </Pressable>
             </View>
             <Text style={styles.promenadeSubtitle}>
-              Saved snapshots appear in your widget museum when you add Lettuce World to your home screen.
+              Saved snapshots appear in your promenade gallery for your roaming enjoyment!
             </Text>
             {widgetPromenadeSorted.length === 0 ? (
               <View style={styles.promenadeEmptyState}>
@@ -1972,24 +2097,62 @@ export default function HomeScreen() {
                   <View key={entry.id} style={[styles.promenadeItem, selectedWidgetPromenadeId === entry.id && styles.promenadeItemSelected]}> 
                     <Image source={{ uri: entry.uri }} style={styles.promenadeImage} />
                     <View style={styles.promenadeMetaRow}>
+                      {editingTitleId === entry.id ? (
+                        <TextInput
+                          style={styles.promenadeTitleInput}
+                          placeholder="Add a title..."
+                          value={editingTitleText}
+                          onChangeText={setEditingTitleText}
+                          placeholderTextColor="#999"
+                          autoFocus
+                          maxLength={50}
+                        />
+                      ) : (
+                        <Pressable
+                          onPress={() => handleStartEditTitle(entry.id, entry.title)}
+                          style={styles.promenadeTitlePressable}
+                        >
+                          <Text style={styles.promenadeTitleText}>
+                            {entry.title || 'Add a title...'}
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
+                    {editingTitleId === entry.id && (
+                      <View style={styles.promenadeTitleButtonsRow}>
+                        <Pressable
+                          style={[styles.promenadeTitleButton, styles.promenadeSaveButton]}
+                          onPress={handleSaveTitle}
+                        >
+                          <Text style={styles.promenadeTitleButtonText}>Save</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.promenadeTitleButton, styles.promenadeCancelButton]}
+                          onPress={handleCancelEditTitle}
+                        >
+                          <Text style={styles.promenadeTitleButtonText}>Cancel</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                    <View style={styles.promenadeRemoveRow}>
                       <Text style={styles.promenadeMetaText}>{formatWidgetTimestamp(entry.savedAt)}</Text>
+                    </View>
+                    <View style={styles.promenadeActionButtons}>
+                      <Pressable
+                        style={styles.promenadeSaveToDeviceButton}
+                        onPress={() => handleSaveArtworkToDevice(entry.uri, entry.title)}
+                        accessibilityLabel="Save artwork to device"
+                      >
+                        <Text style={styles.promenadeSaveToDeviceText}>Save</Text>
+                      </Pressable>
                       <Pressable
                         style={styles.promenadeRemoveButton}
                         onPress={() => handleRemovePromenadePhoto(entry.id)}
-                        accessibilityLabel="Remove snapshot from Widget Promenade"
+                        accessibilityLabel="Remove snapshot from promenade"
                       >
                         <Text style={styles.promenadeRemoveText}>Remove</Text>
                       </Pressable>
                     </View>
-                    <Pressable
-                      style={[styles.promenadeSelectButton, selectedWidgetPromenadeId === entry.id && styles.promenadeSelectButtonSelected]}
-                      onPress={() => handleSelectWidgetPromenadeId(entry.id, entry.uri)}
-                      accessibilityLabel={selectedWidgetPromenadeId === entry.id ? "Selected for Android widget" : "Select for Android widget"}
-                    >
-                      <Text style={styles.promenadeSelectText}>
-                        {selectedWidgetPromenadeId === entry.id ? "Selected for Widget" : "Select for Widget"}
-                      </Text>
-                    </Pressable>
                   </View>
                 ))}
               </ScrollView>
@@ -2576,27 +2739,44 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 12 },
     elevation: 8,
   },
+  modalIconContainer: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalIcon: {
+    fontSize: 64,
+  },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     color: '#1f6f4a',
+    textAlign: 'center',
   },
   modalCopy: {
-    fontSize: 15,
+    fontSize: 16,
     color: '#2d3748',
-    lineHeight: 22,
+    lineHeight: 24,
+    textAlign: 'center',
+    marginBottom: 8,
   },
   modalButton: {
-    marginTop: 8,
+    marginTop: 12,
     backgroundColor: '#1f6f4a',
-    borderRadius: 14,
-    paddingVertical: 12,
+    borderRadius: 16,
+    paddingVertical: 14,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#0d5a3f',
+    shadowColor: '#1f6f4a',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   modalButtonText: {
     color: '#f0fff4',
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 17,
   },
   menuSheetOverlay: {
     flex: 1,
@@ -2951,6 +3131,46 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 2.5,
   },
+  timerRingsContainer: {
+    flexDirection: 'row',
+    marginTop: 12,
+    justifyContent: 'center',
+    gap: 16,
+  },
+  timerRing: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  timerRingLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#999',
+  },
+  timerRingCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerRingValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  dreamCapsuleSleepDisplay: {
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: 4,
+  },
+  dreamCapsuleSleepHeadline: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dreamCapsuleSleepDetail: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
   dreamCapsuleDismissButton: {
     marginTop: 12,
     paddingVertical: 13,
@@ -3070,22 +3290,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#d1fae5',
   },
   promenadeMetaRow: {
-    marginTop: 10,
+    marginTop: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    minHeight: 24,
   },
   promenadeMetaText: {
     fontSize: 12,
     color: '#047857',
-    fontWeight: '600',
+    fontWeight: '500',
   },
   promenadeRemoveButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 999,
     backgroundColor: 'rgba(21, 101, 52, 0.12)',
-    minWidth: 52,
+    minWidth: 60,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -3094,6 +3315,77 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#14532d',
+  },
+  promenadeActionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  promenadeSaveToDeviceButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#34d399',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 60,
+  },
+  promenadeSaveToDeviceText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  promenadeTitleInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#14532d',
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#34d399',
+  },
+  promenadeTitlePressable: {
+    flex: 1,
+    padding: 6,
+  },
+  promenadeTitleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#14532d',
+  },
+  promenadeTitleButtonsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+  },
+  promenadeTitleButton: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promenadeSaveButton: {
+    backgroundColor: '#34d399',
+  },
+  promenadeCancelButton: {
+    backgroundColor: '#d1d5db',
+  },
+  promenadeTitleButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
+  promenadeRemoveRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   menuThemeHeader: {
     flexDirection: 'row',
