@@ -53,6 +53,24 @@ export default function LettuceScreen() {
   const [dailyCountdown, setDailyCountdown] = useState<string | null>(null);
   const spinAnimation = useRef(new Animated.Value(0)).current;
 
+  // Quick action jiggle animations for lettuce page
+  const quickActionWiggles = useRef({
+    music: new Animated.Value(0),
+    widgets: new Animated.Value(0),
+    bonus: new Animated.Value(0),
+    games: new Animated.Value(0),
+  }).current;
+
+  const quickActionRotations = useMemo(
+    () => ({
+      music: quickActionWiggles.music.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-15deg', '0deg', '15deg'] }),
+      widgets: quickActionWiggles.widgets.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-15deg', '0deg', '15deg'] }),
+      bonus: quickActionWiggles.bonus.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-15deg', '0deg', '15deg'] }),
+      games: quickActionWiggles.games.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-15deg', '0deg', '15deg'] }),
+    }),
+    [quickActionWiggles]
+  );
+
   const friendlyName = useMemo(() => {
     const trimmed = profileName.trim();
     return trimmed.length > 0 ? trimmed : 'Gardener';
@@ -222,6 +240,36 @@ export default function LettuceScreen() {
     setBonusMessage(null);
   }, []);
 
+  const handleQuickActionEmojiPress = useCallback(
+    (id: keyof typeof quickActionWiggles) => (event: any) => {
+      event.stopPropagation();
+      const value = quickActionWiggles[id];
+      value.stopAnimation();
+      value.setValue(0);
+      Animated.sequence([
+        Animated.timing(value, {
+          toValue: 1,
+          duration: 90,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(value, {
+          toValue: -1,
+          duration: 90,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(value, {
+          toValue: 0,
+          duration: 120,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    },
+    [quickActionWiggles]
+  );
+
   const handleSpinNow = useCallback(() => {
     if (isSpinning || availableBonusSpins <= 0) return;
 
@@ -389,7 +437,6 @@ export default function LettuceScreen() {
               onPress={handleOpenPremium}
             >
               <Text style={styles.premiumButtonIcon}>⭐</Text>
-              <Text style={styles.premiumButtonText}>Upgrade</Text>
             </Pressable>
           )}
         </View>
@@ -402,9 +449,20 @@ export default function LettuceScreen() {
             style={({ pressed }) => [styles.menuItemCard, pressed && styles.menuItemCardPressed]}
             onPress={handleOpenMusic}
           >
-            <View style={styles.menuItemIconWrap}>
-              <Text style={styles.menuItemIcon}>🎧</Text>
-            </View>
+            <Pressable
+              style={styles.menuItemIconPressable}
+              onPress={handleQuickActionEmojiPress('music')}
+              hitSlop={8}
+            >
+              <Animated.View
+                style={[
+                  styles.menuItemIconWrap,
+                  { transform: [{ rotate: quickActionRotations.music }] },
+                ]}
+              >
+                <Text style={styles.menuItemIcon}>🎧</Text>
+              </Animated.View>
+            </Pressable>
             <View style={styles.menuItemBody}>
               <Text style={styles.menuItemTitle}>Music Lounge</Text>
               <Text style={styles.menuItemSubtitle}>Curated ambience for focus &amp; rest</Text>
@@ -417,9 +475,20 @@ export default function LettuceScreen() {
             style={({ pressed }) => [styles.menuItemCard, pressed && styles.menuItemCardPressed]}
             onPress={handleOpenWidgetPromenade}
           >
-            <View style={styles.menuItemIconWrap}>
-              <Text style={styles.menuItemIcon}>🖼️</Text>
-            </View>
+            <Pressable
+              style={styles.menuItemIconPressable}
+              onPress={handleQuickActionEmojiPress('widgets')}
+              hitSlop={8}
+            >
+              <Animated.View
+                style={[
+                  styles.menuItemIconWrap,
+                  { transform: [{ rotate: quickActionRotations.widgets }] },
+                ]}
+              >
+                <Text style={styles.menuItemIcon}>🖼️</Text>
+              </Animated.View>
+            </Pressable>
             <View style={styles.menuItemBody}>
               <Text style={styles.menuItemTitle}>Promenade Gallery</Text>
               <Text style={styles.menuItemSubtitle}>Showcase saved garden photos</Text>
@@ -432,15 +501,28 @@ export default function LettuceScreen() {
             style={({ pressed }) => [styles.menuItemCard, pressed && styles.menuItemCardPressed]}
             onPress={handleOpenDailyBonus}
           >
-            <View style={styles.menuItemIconWrap}>
-              <Text style={styles.menuItemIcon}>🎁</Text>
-            </View>
+            <Pressable
+              style={styles.menuItemIconPressable}
+              onPress={handleQuickActionEmojiPress('bonus')}
+              hitSlop={8}
+            >
+              <Animated.View
+                style={[
+                  styles.menuItemIconWrap,
+                  { transform: [{ rotate: quickActionRotations.bonus }] },
+                ]}
+              >
+                <Text style={styles.menuItemIcon}>🎁</Text>
+              </Animated.View>
+            </Pressable>
             <View style={styles.menuItemBody}>
               <Text style={styles.menuItemTitle}>Daily Bonus</Text>
               <Text style={styles.menuItemSubtitle}>Spin for surprise clicks</Text>
             </View>
             <View style={styles.menuPill}>
-              <Text style={styles.menuPillText}>Ready</Text>
+              <Text style={styles.menuPillText}>
+                {availableBonusSpins > 0 ? 'Ready' : (dailyCountdown || 'Loading...')}
+              </Text>
             </View>
           </Pressable>
 
@@ -449,9 +531,20 @@ export default function LettuceScreen() {
             style={({ pressed }) => [styles.menuItemCard, pressed && styles.menuItemCardPressed]}
             onPress={handleOpenGamesHub}
           >
-            <View style={styles.menuItemIconWrap}>
-              <Text style={styles.menuItemIcon}>🎮</Text>
-            </View>
+            <Pressable
+              style={styles.menuItemIconPressable}
+              onPress={handleQuickActionEmojiPress('games')}
+              hitSlop={8}
+            >
+              <Animated.View
+                style={[
+                  styles.menuItemIconWrap,
+                  { transform: [{ rotate: quickActionRotations.games }] },
+                ]}
+              >
+                <Text style={styles.menuItemIcon}>🎮</Text>
+              </Animated.View>
+            </Pressable>
             <View style={styles.menuItemBody}>
               <Text style={styles.menuItemTitle}>Games Arcade</Text>
               <Text style={styles.menuItemSubtitle}>Play with your emoji collection</Text>
@@ -655,6 +748,16 @@ export default function LettuceScreen() {
                 </View>
 
                 <View style={styles.benefitItem}>
+                  <Text style={styles.benefitIcon}>🧬</Text>
+                  <View style={styles.benefitText}>
+                    <Text style={styles.benefitTitle}>Unlock More Blended Emojis</Text>
+                    <Text style={styles.benefitDescription}>
+                      Create unlimited blends in the GardenShop or win them by playing mini games
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.benefitItem}>
                   <Text style={styles.benefitIcon}>🚀</Text>
                   <View style={styles.benefitText}>
                     <Text style={styles.benefitTitle}>Ad-Free Experience</Text>
@@ -704,6 +807,7 @@ export default function LettuceScreen() {
                       selectedPremiumPlan === 'monthly' && styles.pricingPriceSelected
                     ]}>$2.99</Text>
                     <Text style={styles.pricingPeriod}>Per Month</Text>
+                    <Text style={styles.pricingEmoji}>🔄</Text>
                   </Pressable>
 
                   {/* Yearly Plan */}
@@ -721,6 +825,7 @@ export default function LettuceScreen() {
                       selectedPremiumPlan === 'yearly' && styles.pricingPriceSelected
                     ]}>$17.99</Text>
                     <Text style={styles.pricingPeriod}>Per Year</Text>
+                    <Text style={styles.pricingEmoji}>🕓</Text>
                   </Pressable>
 
                   {/* Lifetime Plan */}
@@ -988,6 +1093,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(20, 83, 45, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  menuItemIconPressable: {
+    borderRadius: 18,
   },
   menuItemIcon: {
     fontSize: 28,
@@ -1654,8 +1762,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   pricingCardSelected: {
-    borderColor: '#1f6f4a',
-    backgroundColor: '#f0fdf4',
+    borderColor: '#f59e0b',
+    backgroundColor: '#fffbeb',
   },
   pricingPopularBadge: {
     fontSize: 11,
@@ -1668,7 +1776,7 @@ const styles = StyleSheet.create({
   },
   pricingBadgeOverlay: {
     position: 'absolute',
-    bottom: 8,
+    bottom: 28,
     left: 0,
     right: 0,
     alignItems: 'center',
@@ -1690,6 +1798,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '500',
     color: '#6b7280',
+  },
+  pricingEmoji: {
+    fontSize: 18,
+    marginTop: 8,
   },
   premiumPurchaseButtonDisabled: {
     opacity: 0.5,

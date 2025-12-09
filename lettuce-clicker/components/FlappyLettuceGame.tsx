@@ -7,10 +7,13 @@ import {
   Dimensions,
   Animated,
   ScrollView,
+  Modal,
+  Image,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useGame } from '@/context/GameContext';
+import { fetchEmojiKitchenMash } from '@/lib/emojiKitchenService';
 
 interface EmojiItem {
   id?: string;
@@ -50,7 +53,7 @@ export function FlappyLettuceGame({
   selectedEmoji,
   onEmojiChange,
 }: FlappyLettuceGameProps) {
-  const { updateFlappyEmojiStats } = useGame();
+  const { updateFlappyEmojiStats, registerCustomEmoji, grantEmojiUnlock, emojiCatalog } = useGame();
   const [gameState, setGameState] = useState<'select' | 'ready' | 'playing' | 'gameOver'>('select');
   const [score, setScore] = useState(0);
   const [bonusMessage, setBonusMessage] = useState<string | null>(null);
@@ -59,6 +62,12 @@ export function FlappyLettuceGame({
   const [highScore, setHighScore] = useState(0);
   const [showEmojiPicker, setShowEmojiPicker] = useState(true);
   const milestonePreviewedRef = useRef<Set<number>>(new Set());
+  
+  // Flappy Lettuce reward state
+  const [showRewardModal, setShowRewardModal] = useState(false);
+  const [rewardEmoji, setRewardEmoji] = useState<{ emoji: string; name: string; imageUrl?: string } | null>(null);
+  const [rewardEmojiId, setRewardEmojiId] = useState<string | null>(null);
+  const [rewardGrantedForGame, setRewardGrantedForGame] = useState(false);
 
   // Bird physics
   const birdY = useRef(GAME_HEIGHT / 2 - BIRD_SIZE / 2);
@@ -88,6 +97,11 @@ export function FlappyLettuceGame({
     pipeIdCounter.current = 0;
     lastPipeX.current = SCREEN_WIDTH;
     scoredPipes.current.clear();
+    setRewardGrantedForGame(false);
+    // Clear reward states so we can generate new ones on next win
+    setRewardEmoji(null);
+    setRewardEmojiId(null);
+    setShowRewardModal(false);
     if (gameLoopRef.current) {
       clearInterval(gameLoopRef.current);
       gameLoopRef.current = null;
@@ -280,6 +294,90 @@ export function FlappyLettuceGame({
       }
     }
   }, [gameState, score, highScore, selectedEmoji, updateFlappyEmojiStats]);
+
+  // Handle reward modal - guaranteed blended emoji at 5+ points (testing)
+  useEffect(() => {
+    console.log('[Flappy Reward] Effect conditions:', {
+      gameState,
+      score,
+      rewardGrantedForGame,
+      shouldTrigger: gameState === 'gameOver' && score >= 5 && !rewardGrantedForGame,
+    });
+    
+    if (gameState !== 'gameOver' || score < 5 || rewardGrantedForGame) {
+      return;
+    }
+
+    console.log('[Flappy Reward] Game over with score', score, '- triggering reward');
+
+    const grantReward = async () => {
+      const baseEmojis = emojiCatalog.filter(e => !e.id.startsWith('custom-'));
+      if (baseEmojis.length < 2) {
+        console.warn('[Flappy Reward] Not enough base emojis');
+        setRewardGrantedForGame(true);
+        return;
+      }
+
+      let foundBlend = false;
+      let attemptCount = 0;
+      const maxAttempts = 50;
+
+      while (!foundBlend && attemptCount < maxAttempts) {
+        try {
+          const emoji1 = baseEmojis[Math.floor(Math.random() * baseEmojis.length)];
+          let emoji2 = baseEmojis[Math.floor(Math.random() * baseEmojis.length)];
+          
+          let diffAttempts = 0;
+          while (emoji2.id === emoji1.id && diffAttempts < 3) {
+            emoji2 = baseEmojis[Math.floor(Math.random() * baseEmojis.length)];
+            diffAttempts++;
+          }
+
+          console.log(`[Flappy Reward] Attempt ${attemptCount + 1}: Blending ${emoji1.emoji} + ${emoji2.emoji}`);
+          const result = await fetchEmojiKitchenMash(emoji1.emoji, emoji2.emoji);
+          const compositeEmoji = `${emoji1.emoji}${emoji2.emoji}`;
+          
+          console.log(`[Flappy Reward] ✅ Got blend! Image URL:`, result.imageUrl);
+          console.log(`[Flappy Reward] URL type:`, typeof result.imageUrl, 'is string:', typeof result.imageUrl === 'string');
+          
+          // Validate the URL before using it
+          if (!result.imageUrl || typeof result.imageUrl !== 'string' || result.imageUrl.trim() === '') {
+            console.error(`[Flappy Reward] ❌ Invalid image URL from blend:`, result.imageUrl);
+            attemptCount++;
+            continue;
+          }
+          
+          const blendedDef = registerCustomEmoji(compositeEmoji, {
+            name: `${emoji1.name} & ${emoji2.name}`,
+            costOverride: 0,
+            imageUrl: result.imageUrl,
+            tags: ['flappy lettuce reward', 'blend'],
+          });
+          
+          if (blendedDef && blendedDef.imageUrl) {
+            console.log(`[Flappy Reward] Blended definition created:`, blendedDef.id);
+            console.log(`[Flappy Reward] Setting reward state with image URL:`, blendedDef.imageUrl);
+            setRewardEmoji({ 
+              emoji: compositeEmoji, 
+              name: blendedDef.name,
+              imageUrl: blendedDef.imageUrl,
+            });
+            setRewardEmojiId(blendedDef.id);
+            console.log(`[Flappy Reward] About to set showRewardModal to true`);
+            setShowRewardModal(true);
+            foundBlend = true;
+          }
+        } catch (error) {
+          console.warn(`[Flappy Reward] Blend attempt ${attemptCount + 1} failed:`, error);
+          attemptCount++;
+        }
+      }
+
+      setRewardGrantedForGame(true);
+    };
+
+    grantReward();
+  }, [gameState, score, emojiCatalog, registerCustomEmoji, rewardGrantedForGame]);
 
   // Background scroll animation
   useEffect(() => {
@@ -547,6 +645,62 @@ export function FlappyLettuceGame({
           </View>
         </View>
       )}
+      
+      {/* Flappy Lettuce Reward Modal */}
+      <Modal
+        visible={showRewardModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowRewardModal(false)}
+      >
+        <View style={styles.rewardModalOverlay}>
+          <View style={styles.rewardModalCard}>
+            <View style={styles.rewardModalHeader}>
+              <Text style={styles.rewardModalIcon}>🎉</Text>
+            </View>
+            <Text style={styles.rewardModalTitle}>Nice Work!</Text>
+            <Text style={styles.rewardModalSubtitle}>You earned a special blended emoji!</Text>
+            
+            {rewardEmoji && rewardEmoji.imageUrl ? (
+              <View style={styles.rewardEmojiContainer}>
+                <ExpoImage
+                  source={{ uri: rewardEmoji.imageUrl }}
+                  style={styles.rewardEmojiImage}
+                  contentFit="contain"
+                />
+                <Text style={styles.rewardEmojiName}>{rewardEmoji.name}</Text>
+              </View>
+            ) : null}
+            
+            <View style={{ gap: 12 }}>
+              <Pressable
+                style={styles.rewardAcceptButton}
+                onPress={() => {
+                  if (rewardEmojiId) {
+                    console.log('[Flappy Reward] Claiming reward emoji:', rewardEmojiId);
+                    const granted = grantEmojiUnlock(rewardEmojiId);
+                    console.log('[Flappy Reward] Grant result:', granted);
+                  } else {
+                    console.warn('[Flappy Reward] No reward emoji ID to grant');
+                  }
+                  setShowRewardModal(false);
+                }}
+              >
+                <Text style={styles.rewardAcceptButtonText}>Claim Emoji</Text>
+              </Pressable>
+              <Pressable
+                style={styles.rewardDeclineButton}
+                onPress={() => {
+                  console.log('[Flappy Reward] User dismissed reward modal');
+                  setShowRewardModal(false);
+                }}
+              >
+                <Text style={styles.rewardDeclineButtonText}>Maybe Later</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -905,5 +1059,122 @@ const styles = StyleSheet.create({
   walletEmojiImage: {
     width: 36,
     height: 36,
+  },
+  rewardModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  rewardModalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+    maxWidth: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  rewardModalHeader: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#fef3c7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  rewardModalIcon: {
+    fontSize: 40,
+  },
+  rewardModalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#16a34a',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  rewardModalSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  rewardEmojiContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#86efac',
+  },
+  rewardEmojiDisplay: {
+    fontSize: 64,
+    marginBottom: 8,
+  },
+  rewardEmojiImage: {
+    width: 120,
+    height: 120,
+    marginBottom: 8,
+  },
+  rewardEmojiTextFallback: {
+    fontSize: 80,
+    marginBottom: 8,
+  },
+  rewardLoadingOverlay: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: 8,
+  },
+  rewardLoadingText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#16a34a',
+    textAlign: 'center',
+  },
+  rewardEmojiName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#16a34a',
+    textAlign: 'center',
+  },
+  rewardAcceptButton: {
+    backgroundColor: '#16a34a',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    minWidth: 200,
+  },
+  rewardAcceptButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  rewardDeclineButton: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    minWidth: 200,
+    borderWidth: 1,
+    borderColor: '#86efac',
+  },
+  rewardDeclineButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#16a34a',
   },
 });

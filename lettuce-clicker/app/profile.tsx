@@ -374,7 +374,7 @@ export function ProfileContent({ mode = 'screen', onRequestClose }: ProfileConte
   const closeLabel = isModal ? 'Back' : '← Back';
   const closeButtonStyle = isModal ? styles.modalBackButton : styles.backButton;
   const closeTextStyle = isModal ? styles.modalBackLabel : styles.backLabel;
-  const containerStyle = useMemo(() => [styles.safeArea, { paddingTop: insets.top + 12 }], [insets.top, styles.safeArea]);
+  const containerStyle = useMemo(() => [styles.safeArea, { paddingTop: Math.max(insets.top - 16, 0) }], [insets.top, styles.safeArea]);
   const contentStyle = useMemo(
     () => [
       styles.content, 
@@ -745,17 +745,23 @@ const createResponsiveStyles = (isLandscape: boolean, isDarkTheme: boolean = fal
     gap: isLandscape ? 20 : 24,
   },
   topBar: {
-    marginBottom: 12,
+    marginBottom: 16,
     alignItems: 'flex-start',
+    marginTop: 0,
   },
   backButton: {
     alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: isDarkTheme ? 'rgba(255, 255, 255, 0.12)' : 'rgba(31, 111, 74, 0.12)',
+    borderWidth: 1,
+    borderColor: isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(31, 111, 74, 0.2)',
+    backdropFilter: 'blur(10px)',
   },
   backLabel: {
     fontSize: 16,
-    color: '#22543d',
+    color: isDarkTheme ? '#f0fdf4' : '#22543d',
     fontWeight: '600',
   },
   modalBackButton: {
@@ -950,6 +956,7 @@ const createResponsiveStyles = (isLandscape: boolean, isDarkTheme: boolean = fal
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
+    marginTop: -12,
   },
   upgradeTitle: {
     fontSize: 18,

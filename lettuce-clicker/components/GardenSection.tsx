@@ -70,6 +70,7 @@ type Props = {
   freeBlendsUsed: number;
   incrementFreeBlendsUsed: () => void;
   title?: string;
+  onGardenSave?: (uri: string) => void;
 };
 
 type StrokePoint = {
@@ -333,6 +334,7 @@ export function GardenSection({
   freeBlendsUsed,
   incrementFreeBlendsUsed,
   title = 'Lettuce Gardens',
+  onGardenSave,
 }: Props) {
   const insets = useSafeAreaInsets();
   const dimensions = useWindowDimensions();
@@ -396,6 +398,7 @@ export function GardenSection({
   const [isLoadingCustomBlend, setIsLoadingCustomBlend] = useState(false);
   const [isEditingBlendName, setIsEditingBlendName] = useState(false);
   const [editedBlendName, setEditedBlendName] = useState('');
+  const [failedImageUrls, setFailedImageUrls] = useState<Set<string>>(new Set());
   const suppressAutoBlendRef = useRef(false);
   
   const [activeDrag, setActiveDrag] = useState<{ id: string; point: { x: number; y: number } } | null>(null);
@@ -1184,26 +1187,32 @@ export function GardenSection({
       setPenHiddenForSave(true);
       await wait(80);
       const snapshotUri = await captureRef(canvasRef, { format: 'png', quality: 1 });
-      await MediaLibrary.saveToLibraryAsync(snapshotUri);
-      Alert.alert(
-        'Garden saved',
-        'Your garden snapshot is now in your photos. Would you like to add it to your Digital Promenade?',
-        [
-          {
-            text: 'Photos only',
-            style: 'cancel',
-          },
-          {
-            text: 'Add to Digital Promenade',
-            onPress: () => {
-              const entry = addWidgetPromenadePhoto(snapshotUri);
-              if (entry) {
-                Alert.alert('Saved to Digital Promenade', 'Your snapshot is ready to view and share from your Digital Promenade.');
-              }
+      // Don't call MediaLibrary.saveToLibraryAsync here - let the callback handle it
+      // Show custom confirmation modal with updated text
+      if (onGardenSave) {
+        onGardenSave(snapshotUri);
+      } else {
+        // Fallback for screens that don't pass the callback
+        Alert.alert(
+          'Garden saved',
+          'Your garden snapshot is now in your photos. Would you like to add it to your Promenade Gallery?',
+          [
+            {
+              text: 'Photos only',
+              style: 'cancel',
             },
-          },
-        ]
-      );
+            {
+              text: 'Add to Promenade Gallery',
+              onPress: () => {
+                const entry = addWidgetPromenadePhoto(snapshotUri);
+                if (entry) {
+                  Alert.alert('Saved to Promenade Gallery', 'Your snapshot is ready to view and share from your Promenade Gallery.');
+                }
+              },
+            },
+          ]
+        );
+      }
     } catch {
       Alert.alert('Save failed', 'We could not save the garden. Please try again.');
     } finally {
@@ -1626,9 +1635,18 @@ export function GardenSection({
               <View style={styles.shopTileHalo} />
               <View style={[styles.shopTileCircle, locked && styles.shopTileCircleLocked]}>
                 {item.imageUrl ? (
-                  <ExpoImage source={{ uri: item.imageUrl }} style={styles.shopTileEmojiImage} contentFit="contain" />
-                ) : (
+                  <ExpoImage 
+                    source={{ uri: item.imageUrl }} 
+                    style={styles.shopTileEmojiImage}
+                    contentFit="contain"
+                  />
+                ) : !failedImageUrls.has(item.imageUrl || '') && !item.id.startsWith('custom-') ? (
                   <Text style={styles.shopTileEmoji}>{item.emoji}</Text>
+                ) : (
+                  // For custom blends without imageUrl, show a subtle loading indicator
+                  <View style={{ width: 36, height: 36, justifyContent: 'center', alignItems: 'center', opacity: 0.3 }}>
+                    <Text style={styles.shopTileEmoji}>✨</Text>
+                  </View>
                 )}
               </View>
             </View>
@@ -1805,8 +1823,13 @@ export function GardenSection({
                     {emoji && (
                       emoji.imageUrl ? (
                         <ExpoImage source={{ uri: emoji.imageUrl }} style={styles.walletEmojiImage} contentFit="contain" />
-                      ) : (
+                      ) : !emoji.id.startsWith('custom-') ? (
                         <Text style={styles.walletEmoji}>{emoji.emoji}</Text>
+                      ) : (
+                        // For custom blends without imageUrl, show a subtle loading indicator
+                        <View style={{ width: 32, height: 32, justifyContent: 'center', alignItems: 'center', opacity: 0.3 }}>
+                          <Text style={styles.walletEmoji}>✨</Text>
+                        </View>
                       )
                     )}
                   </Pressable>
@@ -3077,6 +3100,7 @@ function InventoryTileItem({
   draggingIdRef,
   shouldShake,
 }: InventoryTileItemProps) {
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const wiggle = useSharedValue(0);
   const scale = useSharedValue(isDragging ? 1.05 : 1);
 
@@ -3188,9 +3212,18 @@ function InventoryTileItem({
             isSelected && { borderColor: '#0f766e', backgroundColor: '#ecfdf3' }
           ]}>
               {item.imageUrl ? (
-                <ExpoImage source={{ uri: item.imageUrl }} style={styles.shopTileEmojiImage} contentFit="contain" />
-              ) : (
+                <ExpoImage 
+                  source={{ uri: item.imageUrl }} 
+                  style={styles.shopTileEmojiImage}
+                  contentFit="contain"
+                />
+              ) : !imageLoadFailed && !item.id.startsWith('custom-') ? (
                 <Text style={styles.shopTileEmoji}>{item.emoji}</Text>
+              ) : (
+                // For custom blends without imageUrl, show a subtle loading indicator
+                <View style={{ width: 36, height: 36, justifyContent: 'center', alignItems: 'center', opacity: 0.3 }}>
+                  <Text style={styles.shopTileEmoji}>✨</Text>
+                </View>
               )}
             </View>
           </View>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions, Image } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -405,22 +405,22 @@ export function UpgradeSection({
                   {(() => {
                     const emojiId = selectedEmojiDetails.id;
                     const emojiString = selectedEmojiDetails.emoji;
-                    // Merge stats from both ID and emoji string (for backwards compatibility)
+                    // Get stats from ID-based storage (primary) or emoji string (fallback for backwards compatibility)
                     const statsById = emojiGameStats[emojiId] || {};
                     const statsByString = emojiGameStats[emojiString] || {};
                     
-                    // Combine stats, preferring the ID-based stats but summing where both exist
+                    // Use ID-based stats if they exist, otherwise use string-based stats (don't add them together)
                     const stats = {
-                      flappyBestScore: Math.max(statsById.flappyBestScore || 0, statsByString.flappyBestScore || 0),
-                      flappyTotalScore: (statsById.flappyTotalScore || 0) + (statsByString.flappyTotalScore || 0),
-                      flappyGamesPlayed: (statsById.flappyGamesPlayed || 0) + (statsByString.flappyGamesPlayed || 0),
-                      slicerTimesSliced: (statsById.slicerTimesSliced || 0) + (statsByString.slicerTimesSliced || 0),
-                      slicerGamesPlayed: (statsById.slicerGamesPlayed || 0) + (statsByString.slicerGamesPlayed || 0),
-                      hopBestScore: Math.max(statsById.hopBestScore || 0, statsByString.hopBestScore || 0),
-                      hopTotalScore: (statsById.hopTotalScore || 0) + (statsByString.hopTotalScore || 0),
-                      hopGamesPlayed: (statsById.hopGamesPlayed || 0) + (statsByString.hopGamesPlayed || 0),
-                      checkersWins: (statsById.checkersWins || 0) + (statsByString.checkersWins || 0),
-                      checkersGamesPlayed: (statsById.checkersGamesPlayed || 0) + (statsByString.checkersGamesPlayed || 0),
+                      flappyBestScore: statsById.flappyBestScore || statsByString.flappyBestScore || 0,
+                      flappyTotalScore: statsById.flappyTotalScore || statsByString.flappyTotalScore || 0,
+                      flappyGamesPlayed: statsById.flappyGamesPlayed || statsByString.flappyGamesPlayed || 0,
+                      slicerTimesSliced: statsById.slicerTimesSliced || statsByString.slicerTimesSliced || 0,
+                      slicerGamesPlayed: statsById.slicerGamesPlayed || statsByString.slicerGamesPlayed || 0,
+                      hopBestScore: statsById.hopBestScore || statsByString.hopBestScore || 0,
+                      hopTotalScore: statsById.hopTotalScore || statsByString.hopTotalScore || 0,
+                      hopGamesPlayed: statsById.hopGamesPlayed || statsByString.hopGamesPlayed || 0,
+                      checkersWins: statsById.checkersWins || statsByString.checkersWins || 0,
+                      checkersGamesPlayed: statsById.checkersGamesPlayed || statsByString.checkersGamesPlayed || 0,
                     };
                     
                     const hasFlappyStats = stats.flappyBestScore > 0;

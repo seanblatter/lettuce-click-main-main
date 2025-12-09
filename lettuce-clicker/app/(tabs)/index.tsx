@@ -198,6 +198,7 @@ export default function HomeScreen() {
     widgetPromenade,
     removeWidgetPromenadePhoto,
     updateWidgetPromenadeTitle,
+    addWidgetPromenadePhoto,
   } = useGame();
 
   // Get current theme for background emoji
@@ -223,6 +224,12 @@ export default function HomeScreen() {
   const [selectedWidgetPromenadeId, setSelectedWidgetPromenadeId] = useState<string | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [editingTitleText, setEditingTitleText] = useState('');
+  // Custom save confirmation modal
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const [saveConfirmationMessage, setSaveConfirmationMessage] = useState('');
+  // Garden save confirmation
+  const [showGardenSaveConfirmation, setShowGardenSaveConfirmation] = useState(false);
+  const [pendingGardenSnapshotUri, setPendingGardenSnapshotUri] = useState<string | null>(null);
 
   // Get search params to listen for Daily Bonus spin trigger from Lettuce tab
   const searchParams = useLocalSearchParams();
@@ -689,10 +696,10 @@ export default function HomeScreen() {
   );
   const quickActionRotations = useMemo(
     () => ({
-      music: quickActionWiggles.music.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
-      bonus: quickActionWiggles.bonus.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
-      widgets: quickActionWiggles.widgets.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
-      games: quickActionWiggles.games.interpolate({ inputRange: [-1, 1], outputRange: ['-10deg', '10deg'] }),
+      music: quickActionWiggles.music.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-15deg', '0deg', '15deg'] }),
+      bonus: quickActionWiggles.bonus.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-15deg', '0deg', '15deg'] }),
+      widgets: quickActionWiggles.widgets.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-15deg', '0deg', '15deg'] }),
+      games: quickActionWiggles.games.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-15deg', '0deg', '15deg'] }),
     }),
     [quickActionWiggles]
   );
@@ -967,7 +974,8 @@ export default function HomeScreen() {
       // Request media library permissions
       const permission = await MediaLibrary.requestPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission denied', 'Please enable photo library access to save artwork.');
+        setSaveConfirmationMessage('Permission denied. Please enable photo library access to save artwork.');
+        setShowSaveConfirmation(true);
         return;
       }
 
@@ -975,10 +983,12 @@ export default function HomeScreen() {
       await MediaLibrary.saveToLibraryAsync(uri);
       
       const displayTitle = title ? `"${title}"` : 'Artwork';
-      Alert.alert('Saved!', `${displayTitle} has been saved to your device.`);
+      setSaveConfirmationMessage(`${displayTitle} has been saved to your device.`);
+      setShowSaveConfirmation(true);
     } catch (error) {
       console.error('Failed to save artwork:', error);
-      Alert.alert('Save failed', 'We could not save the artwork. Please try again.');
+      setSaveConfirmationMessage('We could not save the artwork. Please try again.');
+      setShowSaveConfirmation(true);
     }
   }, []);
 
@@ -1278,6 +1288,11 @@ export default function HomeScreen() {
     hasDoubledPassiveHarvest,
     isWatchingResumeOffer,
   ]);
+
+  const handleGardenSave = useCallback((uri: string) => {
+    setPendingGardenSnapshotUri(uri);
+    setShowGardenSaveConfirmation(true);
+  }, []);
 
 
 
@@ -2045,7 +2060,7 @@ export default function HomeScreen() {
 
       <Modal
         visible={showProfileQuickAction}
-        animationType="slide"
+        animationType="fade"
         transparent
         supportedOrientations={['portrait', 'landscape']}
         onRequestClose={handleCloseProfileQuickAction}
@@ -2168,7 +2183,10 @@ export default function HomeScreen() {
         emojiCatalog={emojiCatalog}
         customEmojiNames={customEmojiNames}
         hasPremiumUpgrade={hasPremiumUpgrade}
-        onPurchasePremium={purchasePremiumUpgrade}
+        onPurchasePremium={() => {
+          setShowGamesHub(false);
+          setTimeout(() => setShowProfileQuickAction(true), 100);
+        }}
       />
 
       <TemperatureUnitModal
@@ -2178,6 +2196,96 @@ export default function HomeScreen() {
         onSelectUnit={setTemperatureUnit}
         sampleTemperature={22}
       />
+
+      <Modal
+        visible={showSaveConfirmation}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowSaveConfirmation(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconContainer}>
+              <Text style={styles.modalIcon}>✨</Text>
+            </View>
+            <Text style={styles.modalTitle}>Garden Saved</Text>
+            <Text style={styles.modalCopy}>{saveConfirmationMessage}</Text>
+            <Pressable
+              accessibilityLabel="Close save confirmation"
+              style={styles.modalButton}
+              onPress={() => setShowSaveConfirmation(false)}
+            >
+              <Text style={styles.modalButtonText}>Lovely</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showGardenSaveConfirmation}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowGardenSaveConfirmation(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIconContainer}>
+              <Text style={styles.modalIcon}>✨</Text>
+            </View>
+            <Text style={styles.modalTitle}>Garden Saved</Text>
+            <Text style={styles.modalCopy}>Your garden snapshot is now in your photos. Would you like to add it to your Promenade Gallery?</Text>
+            <View style={{ gap: 12 }}>
+              <Pressable
+                accessibilityLabel="Add to Promenade Gallery"
+                style={styles.modalButton}
+                onPress={async () => {
+                  if (pendingGardenSnapshotUri) {
+                    try {
+                      // Save to media library
+                      await MediaLibrary.saveToLibraryAsync(pendingGardenSnapshotUri);
+                      // Add to promenade
+                      const entry = addWidgetPromenadePhoto(pendingGardenSnapshotUri);
+                      if (entry) {
+                        setPendingGardenSnapshotUri(null);
+                        setShowGardenSaveConfirmation(false);
+                        // Show success message
+                        setSaveConfirmationMessage('Your snapshot is ready to view and share from your Promenade Gallery.');
+                        setShowSaveConfirmation(true);
+                      }
+                    } catch (error) {
+                      console.error('Failed to save garden snapshot:', error);
+                      setSaveConfirmationMessage('Failed to save snapshot. Please try again.');
+                      setShowSaveConfirmation(true);
+                    }
+                  }
+                }}
+              >
+                <Text style={styles.modalButtonText}>Add to Promenade Gallery</Text>
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Keep photos only"
+                style={[styles.modalButton, { backgroundColor: '#f0fdf4', borderColor: '#1f6f4a', borderWidth: 1 }]}
+                onPress={async () => {
+                  if (pendingGardenSnapshotUri) {
+                    try {
+                      // Just save to media library without adding to promenade
+                      await MediaLibrary.saveToLibraryAsync(pendingGardenSnapshotUri);
+                      setPendingGardenSnapshotUri(null);
+                      setShowGardenSaveConfirmation(false);
+                    } catch (error) {
+                      console.error('Failed to save garden snapshot:', error);
+                      setSaveConfirmationMessage('Failed to save snapshot. Please try again.');
+                      setShowSaveConfirmation(true);
+                    }
+                  }
+                }}
+              >
+                <Text style={[styles.modalButtonText, { color: '#1f6f4a' }]}>Photos Only</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
