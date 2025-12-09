@@ -297,18 +297,9 @@ export function FlappyLettuceGame({
 
   // Handle reward modal - guaranteed blended emoji at 5+ points (testing)
   useEffect(() => {
-    console.log('[Flappy Reward] Effect conditions:', {
-      gameState,
-      score,
-      rewardGrantedForGame,
-      shouldTrigger: gameState === 'gameOver' && score >= 5 && !rewardGrantedForGame,
-    });
-    
     if (gameState !== 'gameOver' || score < 5 || rewardGrantedForGame) {
       return;
     }
-
-    console.log('[Flappy Reward] Game over with score', score, '- triggering reward');
 
     const grantReward = async () => {
       const baseEmojis = emojiCatalog.filter(e => !e.id.startsWith('custom-'));
@@ -337,12 +328,8 @@ export function FlappyLettuceGame({
           const result = await fetchEmojiKitchenMash(emoji1.emoji, emoji2.emoji);
           const compositeEmoji = `${emoji1.emoji}${emoji2.emoji}`;
           
-          console.log(`[Flappy Reward] ✅ Got blend! Image URL:`, result.imageUrl);
-          console.log(`[Flappy Reward] URL type:`, typeof result.imageUrl, 'is string:', typeof result.imageUrl === 'string');
-          
           // Validate the URL before using it
           if (!result.imageUrl || typeof result.imageUrl !== 'string' || result.imageUrl.trim() === '') {
-            console.error(`[Flappy Reward] ❌ Invalid image URL from blend:`, result.imageUrl);
             attemptCount++;
             continue;
           }
@@ -355,15 +342,12 @@ export function FlappyLettuceGame({
           });
           
           if (blendedDef && blendedDef.imageUrl) {
-            console.log(`[Flappy Reward] Blended definition created:`, blendedDef.id);
-            console.log(`[Flappy Reward] Setting reward state with image URL:`, blendedDef.imageUrl);
             setRewardEmoji({ 
               emoji: compositeEmoji, 
               name: blendedDef.name,
               imageUrl: blendedDef.imageUrl,
             });
             setRewardEmojiId(blendedDef.id);
-            console.log(`[Flappy Reward] About to set showRewardModal to true`);
             setShowRewardModal(true);
             foundBlend = true;
           }
@@ -677,11 +661,7 @@ export function FlappyLettuceGame({
                 style={styles.rewardAcceptButton}
                 onPress={() => {
                   if (rewardEmojiId) {
-                    console.log('[Flappy Reward] Claiming reward emoji:', rewardEmojiId);
-                    const granted = grantEmojiUnlock(rewardEmojiId);
-                    console.log('[Flappy Reward] Grant result:', granted);
-                  } else {
-                    console.warn('[Flappy Reward] No reward emoji ID to grant');
+                    grantEmojiUnlock(rewardEmojiId);
                   }
                   setShowRewardModal(false);
                 }}
@@ -691,7 +671,6 @@ export function FlappyLettuceGame({
               <Pressable
                 style={styles.rewardDeclineButton}
                 onPress={() => {
-                  console.log('[Flappy Reward] User dismissed reward modal');
                   setShowRewardModal(false);
                 }}
               >

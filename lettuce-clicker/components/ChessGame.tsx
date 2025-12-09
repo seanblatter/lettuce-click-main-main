@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Pressable, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Pressable, Animated, Modal } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { fetchEmojiKitchenMash } from '@/lib/emojiKitchenService';
 import { useGame } from '@/context/GameContext';
@@ -10,6 +10,7 @@ type Difficulty = 'easy' | 'medium' | 'hard';
 
 export const ChessGame: React.FC<{ onBack?: () => void; wallet: EmojiItem[] }> = ({ onBack, wallet }) => {
   const gameContext = useGame();
+  const { registerCustomEmoji, emojiCatalog, grantEmojiUnlock } = gameContext;
   const [gameState, setGameState] = useState<'select' | 'difficulty' | 'playing' | 'gameOver'>('select');
   const [playerEmoji, setPlayerEmoji] = useState<EmojiItem | null>(null);
   const [cpuEmoji, setCpuEmoji] = useState<EmojiItem | null>(null);
@@ -25,6 +26,12 @@ export const ChessGame: React.FC<{ onBack?: () => void; wallet: EmojiItem[] }> =
   const [winRewardEmojiUrl, setWinRewardEmojiUrl] = useState<string | null>(null);
   const [forcedJumpPiece, setForcedJumpPiece] = useState<number | null>(null);
   const rotateAnim = useRef(new Animated.Value(0)).current;
+  
+  // Hard mode reward states
+  const [showHardModeRewardModal, setShowHardModeRewardModal] = useState(false);
+  const [hardModeRewardEmoji, setHardModeRewardEmoji] = useState<{ emoji: string; name: string; imageUrl?: string } | null>(null);
+  const [hardModeRewardEmojiId, setHardModeRewardEmojiId] = useState<string | null>(null);
+  const [hardModeRewardGrantedForGame, setHardModeRewardGrantedForGame] = useState(false);
 
   useEffect(() => {
     if (playerEmoji && cpuEmoji && gameState === 'select') {
@@ -42,6 +49,74 @@ export const ChessGame: React.FC<{ onBack?: () => void; wallet: EmojiItem[] }> =
       blendEmojis();
     }
   }, [playerEmoji, cpuEmoji, gameState]);
+
+  // Handle hard mode reward - blended emoji when player wins on hard difficulty
+  useEffect(() => {
+    if (gameState !== 'gameOver' || gameWinner !== 1 || difficulty !== 'hard' || hardModeRewardGrantedForGame) {
+      return;
+    }
+
+    const grantReward = async () => {
+      const baseEmojis = emojiCatalog.filter(e => !e.id.startsWith('custom-'));
+      if (baseEmojis.length < 2) {
+        console.warn('[Hard Mode Reward] Not enough base emojis');
+        setHardModeRewardGrantedForGame(true);
+        return;
+      }
+
+      let foundBlend = false;
+      let attemptCount = 0;
+      const maxAttempts = 50;
+
+      while (!foundBlend && attemptCount < maxAttempts) {
+        try {
+          const emoji1 = baseEmojis[Math.floor(Math.random() * baseEmojis.length)];
+          let emoji2 = baseEmojis[Math.floor(Math.random() * baseEmojis.length)];
+          
+          let diffAttempts = 0;
+          while (emoji2.id === emoji1.id && diffAttempts < 3) {
+            emoji2 = baseEmojis[Math.floor(Math.random() * baseEmojis.length)];
+            diffAttempts++;
+          }
+
+          console.log(`[Hard Mode Reward] Attempt ${attemptCount + 1}: Blending ${emoji1.emoji} + ${emoji2.emoji}`);
+          const result = await fetchEmojiKitchenMash(emoji1.emoji, emoji2.emoji);
+          const compositeEmoji = `${emoji1.emoji}${emoji2.emoji}`;
+          
+          // Validate the URL before using it
+          if (!result.imageUrl || typeof result.imageUrl !== 'string' || result.imageUrl.trim() === '') {
+            attemptCount++;
+            continue;
+          }
+          
+          const blendedDef = registerCustomEmoji(compositeEmoji, {
+            name: `${emoji1.name} & ${emoji2.name}`,
+            costOverride: 0,
+            imageUrl: result.imageUrl,
+            tags: ['hard mode reward', 'blend'],
+          });
+          
+          if (blendedDef && blendedDef.imageUrl) {
+            setHardModeRewardEmoji({ 
+              emoji: compositeEmoji, 
+              name: blendedDef.name,
+              imageUrl: blendedDef.imageUrl,
+            });
+            setHardModeRewardEmojiId(blendedDef.id);
+            setShowHardModeRewardModal(true);
+            foundBlend = true;
+          }
+        } catch (error) {
+          console.warn(`[Hard Mode Reward] Blend attempt ${attemptCount + 1} failed:`, error);
+          attemptCount++;
+        }
+      }
+
+      setHardModeRewardGrantedForGame(true);
+    };
+
+    grantReward();
+  }, [gameState, gameWinner, difficulty, hardModeRewardGrantedForGame, emojiCatalog, registerCustomEmoji]);
 
   const initializeBoard = (p: EmojiItem, c: EmojiItem) => {
     const newBoard = Array(64).fill(null);
@@ -413,6 +488,11 @@ export const ChessGame: React.FC<{ onBack?: () => void; wallet: EmojiItem[] }> =
   const newGame = () => {
     if (playerEmoji && cpuEmoji) {
       setWinRewardEmojiUrl(null);
+      // Clear hard mode reward states for next game
+      setHardModeRewardEmoji(null);
+      setHardModeRewardEmojiId(null);
+      setShowHardModeRewardModal(false);
+      setHardModeRewardGrantedForGame(false);
       initializeBoard(playerEmoji, cpuEmoji);
       setGameState('difficulty');
     }
@@ -505,7 +585,6 @@ export const ChessGame: React.FC<{ onBack?: () => void; wallet: EmojiItem[] }> =
                   <Text style={styles.characterEmoji}>{playerEmoji?.emoji || '?'}</Text>
                 )}
               </TouchableOpacity>
-              {playerEmoji && <Text style={styles.characterName}>{playerEmoji.name || playerEmoji.emoji}</Text>}
             </View>
 
             <View style={styles.cpuSection}>
@@ -520,7 +599,6 @@ export const ChessGame: React.FC<{ onBack?: () => void; wallet: EmojiItem[] }> =
                   <Text style={styles.characterEmoji}>{cpuEmoji?.emoji || '?'}</Text>
                 )}
               </TouchableOpacity>
-              {cpuEmoji && <Text style={styles.characterName}>{cpuEmoji.name || cpuEmoji.emoji}</Text>}
             </View>
           </View>
 
@@ -704,6 +782,57 @@ export const ChessGame: React.FC<{ onBack?: () => void; wallet: EmojiItem[] }> =
             </View>
           </View>
         )}
+
+        {/* Hard Mode Reward Modal */}
+        <Modal
+          visible={showHardModeRewardModal}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setShowHardModeRewardModal(false)}
+        >
+          <View style={styles.rewardModalOverlay}>
+            <View style={styles.rewardModalCard}>
+              <View style={styles.rewardModalHeader}>
+                <Text style={styles.rewardModalIcon}>🎉</Text>
+              </View>
+              <Text style={styles.rewardModalTitle}>Hard Mode Victory!</Text>
+              <Text style={styles.rewardModalSubtitle}>You earned a special blended emoji!</Text>
+              
+              {hardModeRewardEmoji && hardModeRewardEmoji.imageUrl ? (
+                <View style={styles.rewardEmojiContainer}>
+                  <ExpoImage
+                    source={{ uri: hardModeRewardEmoji.imageUrl }}
+                    style={styles.rewardEmojiImage}
+                    contentFit="contain"
+                  />
+                  <Text style={styles.rewardEmojiName}>{hardModeRewardEmoji.name}</Text>
+                </View>
+              ) : null}
+              
+              <View style={{ gap: 12 }}>
+                <Pressable
+                  style={styles.rewardAcceptButton}
+                  onPress={() => {
+                    if (hardModeRewardEmojiId) {
+                      grantEmojiUnlock(hardModeRewardEmojiId);
+                    }
+                    setShowHardModeRewardModal(false);
+                  }}
+                >
+                  <Text style={styles.rewardAcceptButtonText}>Claim Emoji</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.rewardDeclineButton}
+                  onPress={() => {
+                    setShowHardModeRewardModal(false);
+                  }}
+                >
+                  <Text style={styles.rewardDeclineButtonText}>Maybe Later</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </View>
   );
@@ -719,7 +848,7 @@ const styles = StyleSheet.create({
   setupContainer: { padding: 16, gap: 16 },
   setupTitle: { fontSize: 28, fontWeight: '700', color: '#065f46', textAlign: 'center' },
   setupSubtitle: { fontSize: 16, color: '#047857', textAlign: 'center' },
-  characterSelectionRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingVertical: 16 },
+  characterSelectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 40 },
   playerSection: { alignItems: 'center', gap: 8 },
   cpuSection: { alignItems: 'center', gap: 8 },
   sectionLabel: { fontSize: 14, fontWeight: '600', color: '#047857' },
@@ -799,6 +928,21 @@ const styles = StyleSheet.create({
   playAgainTextFlappy: { fontSize: 16, fontWeight: '700', color: '#fff', textShadowColor: 'rgba(0, 0, 0, 0.3)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 },
   homeButtonFlappy: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center', backgroundColor: '#E5E5E5', borderWidth: 2, borderColor: '#999' },
   homeTextFlappy: { fontSize: 16, fontWeight: '600', color: '#333' },
+  
+  // Reward modal styles
+  rewardModalOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0, 0, 0, 0.6)' },
+  rewardModalCard: { backgroundColor: '#fff', borderRadius: 20, padding: 24, alignItems: 'center', maxWidth: '85%', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  rewardModalHeader: { marginBottom: 16 },
+  rewardModalIcon: { fontSize: 48 },
+  rewardModalTitle: { fontSize: 24, fontWeight: '700', color: '#065f46', marginBottom: 8, textAlign: 'center' },
+  rewardModalSubtitle: { fontSize: 16, color: '#047857', marginBottom: 16, textAlign: 'center' },
+  rewardEmojiContainer: { alignItems: 'center', marginBottom: 24, gap: 12 },
+  rewardEmojiImage: { width: 120, height: 120 },
+  rewardEmojiName: { fontSize: 16, fontWeight: '600', color: '#065f46', textAlign: 'center' },
+  rewardAcceptButton: { width: '100%', paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: '#22c55e', borderWidth: 2, borderColor: '#16a34a' },
+  rewardAcceptButtonText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  rewardDeclineButton: { width: '100%', paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: '#E5E5E5', borderWidth: 1, borderColor: '#999' },
+  rewardDeclineButtonText: { fontSize: 16, fontWeight: '600', color: '#333' },
 });
 
 export default ChessGame;
