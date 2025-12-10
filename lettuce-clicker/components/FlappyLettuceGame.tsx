@@ -295,9 +295,9 @@ export function FlappyLettuceGame({
     }
   }, [gameState, score, highScore, selectedEmoji, updateFlappyEmojiStats]);
 
-  // Handle reward modal - guaranteed blended emoji at 5+ points (testing)
+  // Handle reward modal - guaranteed blended emoji at 25+ points
   useEffect(() => {
-    if (gameState !== 'gameOver' || score < 5 || rewardGrantedForGame) {
+    if (gameState !== 'gameOver' || score < 25 || rewardGrantedForGame) {
       return;
     }
 
