@@ -583,7 +583,7 @@ export function UpgradeSection({
         <View style={styles.workshopPanel}>
           <View style={styles.panelHeaderRow}>
             <View style={styles.panelHeaderLeft}>
-              <Text style={styles.panelHeaderEmoji}>🤖</Text>
+              <Text style={styles.panelHeaderEmoji}>🕗</Text>
               <Text style={styles.panelTitle}>Automation Workshop</Text>
             </View>
           </View>

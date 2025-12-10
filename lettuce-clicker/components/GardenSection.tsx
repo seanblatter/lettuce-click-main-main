@@ -3117,74 +3117,14 @@ function InventoryTileItem({
     }
   }, [shouldShake, wiggle]);
 
-  const longPressGesture = Gesture.LongPress()
-    .minDuration(Platform.OS === 'android' ? 350 : 400)
-    .onStart(() => {
-      console.log('🔄 Long press gesture triggered for:', item.name);
-      
-      // Prioritize wallet functionality over drag reordering
-      if (onInventoryLongPress && !draggingIdRef.current) {
-        console.log('🎯 Calling wallet handler for:', item.name);
-        runOnJS(onInventoryLongPress)(item);
-        return;
-      }
-      
-      if (!canReorder) {
-        console.log('❌ Cannot reorder, skipping drag');
-        return;
-      }
-      console.log('🔀 Starting drag for:', item.name);
-      runOnJS(beginDrag)(item.id, index);
-    })
-    .onEnd(() => {
-      if (!canReorder) {
-        return;
-      }
-      runOnJS(endDrag)();
-    })
-    .onFinalize(() => {
-      if (!canReorder) {
-        return;
-      }
-      runOnJS(endDrag)();
-    })
-    .enabled(true); // Always enabled for wallet functionality
-
-  const panGesture = Gesture.Pan()
-    .onUpdate((event) => {
-      if (!canReorder) {
-        return;
-      }
-      runOnJS(updateDrag)(event.translationX, event.translationY);
-    })
-    .onEnd(() => {
-      if (!canReorder) {
-        return;
-      }
-      runOnJS(endDrag)();
-    })
-    .onFinalize(() => {
-      if (!canReorder) {
-        return;
-      }
-      runOnJS(endDrag)();
-    })
-    .enabled(canReorder)
-    .shouldCancelWhenOutside(true);
-
-  const combinedGesture = canReorder 
-    ? Gesture.Simultaneous(longPressGesture, panGesture)
-    : longPressGesture;
-
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ rotateZ: `${wiggle.value}deg` }, { scale: scale.value }],
   }));
 
   return (
-    <GestureDetector gesture={combinedGesture}>
-      <Animated.View style={[styles.sheetTileWrapper, animatedStyle]}>
-        <Pressable
-          onLayout={onLayout}
+    <Animated.View style={[styles.sheetTileWrapper, animatedStyle]}>
+      <Pressable
+        onLayout={onLayout}
           style={[
             styles.shopTile,
             isSelected && styles.shopTilePressed,
@@ -3202,6 +3142,13 @@ function InventoryTileItem({
               onSelect(item.id, item.owned);
             }
           }}
+          onLongPress={() => {
+            console.log('📱 Pressable long press fired for:', item.name);
+            if (onInventoryLongPress) {
+              onInventoryLongPress(item);
+            }
+          }}
+          delayLongPress={Platform.OS === 'android' ? 350 : 400}
           accessibilityLabel={`${item.name} (${categoryLabel}) emoji`}
           accessibilityHint="Tap for stats, long press to add to wallet."
         >
@@ -3229,9 +3176,8 @@ function InventoryTileItem({
           </View>
         </Pressable>
       </Animated.View>
-    </GestureDetector>
-  );
-}
+    );
+  }
 
 type DraggablePlacementProps = {
   placement: Placement;
