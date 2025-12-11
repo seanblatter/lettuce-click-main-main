@@ -152,17 +152,6 @@ const modelStrokePoints = (points: StrokePoint[], style: StrokeStyleId, seed: nu
       y: smoothed.y + noiseY,
     };
 
-    const distance = Math.hypot(modeledPoint.x - lastPoint.x, modeledPoint.y - lastPoint.y);
-    const insertCount = Math.max(0, Math.floor(distance / 4));
-
-    for (let step = 1; step <= insertCount; step += 1) {
-      const t = step / (insertCount + 1);
-      modeled.push({
-        x: lerp(lastPoint.x, modeledPoint.x, t),
-        y: lerp(lastPoint.y, modeledPoint.y, t),
-      });
-    }
-
     modeled.push(modeledPoint);
     lastPoint = modeledPoint;
   }
@@ -247,12 +236,11 @@ const COLOR_WHEEL_DIAMETER = 160;
 const COLOR_WHEEL_RADIUS = 64;
 const COLOR_WHEEL_SWATCH_SIZE = 34;
 const PEN_SIZES = [3, 5, 8, 12];
-const BRUSH_STYLE_OPTIONS: { id: StrokeStyleId; label: string; helper: string; emoji: string; sizeScale: number; opacity: number; smoothing: number; jitter: number; taper: boolean }[] = [
+const BRUSH_STYLE_OPTIONS: { id: StrokeStyleId; label: string; helper: string; sizeScale: number; opacity: number; smoothing: number; jitter: number; taper: boolean }[] = [
   {
     id: 'pencil',
     label: 'Pencil',
     helper: 'Sketch with a soft pencil grain.',
-    emoji: '✏️',
     sizeScale: 0.9,
     opacity: 0.75,
     smoothing: 0.55,
@@ -263,7 +251,6 @@ const BRUSH_STYLE_OPTIONS: { id: StrokeStyleId; label: string; helper: string; e
     id: 'pen',
     label: 'Pen',
     helper: 'Precise ink that hugs your path.',
-    emoji: '🖊️',
     sizeScale: 1,
     opacity: 1,
     smoothing: 0.65,
@@ -274,7 +261,6 @@ const BRUSH_STYLE_OPTIONS: { id: StrokeStyleId; label: string; helper: string; e
     id: 'marker',
     label: 'Marker',
     helper: 'Thick strokes with steady flow.',
-    emoji: '🖍️',
     sizeScale: 1.4,
     opacity: 0.9,
     smoothing: 0.5,
@@ -285,7 +271,6 @@ const BRUSH_STYLE_OPTIONS: { id: StrokeStyleId; label: string; helper: string; e
     id: 'chalk',
     label: 'Chalk',
     helper: 'Textured lines with dusty edges.',
-    emoji: '🧂',
     sizeScale: 1.2,
     opacity: 0.7,
     smoothing: 0.45,
@@ -473,8 +458,7 @@ export function GardenSection({
   const [priceSortOrder, setPriceSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showPalette, setShowPalette] = useState(false);
   const [isFontDropdownOpen, setFontDropdownOpen] = useState(false);
-  const [showColorWheel, setShowColorWheel] = useState(false);
-  const [showBrushPalette, setShowBrushPalette] = useState(false);
+  const [showExtendedPalette, setShowExtendedPalette] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [penColor, setPenColor] = useState<string>(QUICK_DRAW_COLORS[0]);
   const [penSize, setPenSize] = useState(PEN_SIZES[1]);
@@ -2429,27 +2413,14 @@ export function GardenSection({
                     <Text style={styles.eraserIcon}>🧽</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.colorWheelButton, showColorWheel && styles.colorWheelButtonActive]}
-                    onPress={() => {
-                      setShowBrushPalette(false);
-                      setShowColorWheel((prev) => !prev);
-                    }}
-                    accessibilityLabel={showColorWheel ? 'Hide color wheel' : 'Show color wheel'}
+                    style={[styles.colorWheelButton, showExtendedPalette && styles.colorWheelButtonActive]}
+                    onPress={() => setShowExtendedPalette((prev) => !prev)}
+                    accessibilityLabel={showExtendedPalette ? 'Hide color wheel' : 'Show color wheel'}
                   >
                     <Text style={styles.colorWheelIcon}>🎨</Text>
                   </Pressable>
-                  <Pressable
-                    style={[styles.brushPaletteButton, showBrushPalette && styles.brushPaletteButtonActive]}
-                    onPress={() => {
-                      setShowColorWheel(false);
-                      setShowBrushPalette((prev) => !prev);
-                    }}
-                    accessibilityLabel={showBrushPalette ? 'Hide brush strokes' : 'Show brush strokes'}
-                  >
-                    <Text style={styles.brushPaletteIcon}>🖌️</Text>
-                  </Pressable>
                 </View>
-                {showColorWheel ? (
+                {showExtendedPalette ? (
                   <View style={styles.colorWheelWrap}>
                     <View style={styles.colorWheelPanel}>
                       <View style={styles.colorWheelColumn}>
@@ -2471,24 +2442,15 @@ export function GardenSection({
                           })}
                           <Pressable
                             style={styles.colorWheelClose}
-                            onPress={() => setShowColorWheel(false)}
+                            onPress={() => setShowExtendedPalette(false)}
                             accessibilityLabel="Collapse color wheel"
                           >
                             <Text style={styles.colorWheelCloseText}>Close</Text>
                           </Pressable>
                         </View>
                       </View>
-                    </View>
-                  </View>
-                ) : null}
-                {showBrushPalette ? (
-                  <View style={styles.colorWheelWrap}>
-                    <View style={[styles.colorWheelPanel, styles.brushPanel]}>
                       <View style={styles.brushStyleColumn}>
-                        <View style={styles.brushHeaderRow}>
-                          <Text style={styles.brushStyleTitle}>Brush stroke</Text>
-                          <Text style={styles.brushStyleHelper}>Pick a vibe for your lines.</Text>
-                        </View>
+                        <Text style={styles.brushStyleTitle}>Brush stroke</Text>
                         {BRUSH_STYLE_OPTIONS.map((option) => {
                           const isActive = option.id === strokeStyle;
                           return (
@@ -2500,17 +2462,7 @@ export function GardenSection({
                               accessibilityLabel={`${option.label} brush style`}
                               accessibilityState={{ selected: isActive }}
                             >
-                              <View style={styles.brushChipHeader}>
-                                <Text style={styles.brushStyleChipLabel}>{`${option.emoji} ${option.label}`}</Text>
-                                <View style={styles.brushPreviewBar}>
-                                  <View
-                                    style={[
-                                      styles.brushPreviewStroke,
-                                      isActive && styles.brushPreviewStrokeActive,
-                                    ]}
-                                  />
-                                </View>
-                              </View>
+                              <Text style={styles.brushStyleChipLabel}>{option.label}</Text>
                               <Text style={styles.brushStyleChipHelper}>{option.helper}</Text>
                             </Pressable>
                           );
@@ -5008,28 +4960,6 @@ const styles = StyleSheet.create({
   colorWheelIcon: {
     fontSize: 20,
   },
-  brushPaletteButton: {
-    width: COLOR_WHEEL_SWATCH_SIZE,
-    height: COLOR_WHEEL_SWATCH_SIZE,
-    borderRadius: COLOR_WHEEL_SWATCH_SIZE / 2,
-    borderWidth: 2,
-    borderColor: '#0f766e',
-    backgroundColor: '#ecfeff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#0ea5e9',
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-  },
-  brushPaletteButtonActive: {
-    borderColor: '#115e59',
-    backgroundColor: '#cffafe',
-  },
-  brushPaletteIcon: {
-    fontSize: 20,
-  },
   colorWheelWrap: {
     marginTop: 16,
     alignItems: 'stretch',
@@ -5059,9 +4989,6 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
-  },
-  brushPanel: {
-    gap: 0,
   },
   colorWheelSwatch: {
     position: 'absolute',
@@ -5104,18 +5031,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: '#ffffff',
   },
-  brushHeaderRow: {
-    gap: 4,
-  },
   brushStyleTitle: {
     fontSize: 14,
     fontWeight: '800',
     color: '#134e32',
     letterSpacing: 0.3,
-  },
-  brushStyleHelper: {
-    fontSize: 12,
-    color: '#0f172a',
   },
   brushStyleChip: {
     borderWidth: 1,
@@ -5135,12 +5055,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
-  brushChipHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
   brushStyleChipLabel: {
     fontSize: 14,
     fontWeight: '700',
@@ -5150,28 +5064,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#334155',
     lineHeight: 16,
-  },
-  brushPreviewBar: {
-    flex: 1,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#ecfeff',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-  },
-  brushPreviewStroke: {
-    height: 6,
-    borderRadius: 4,
-    backgroundColor: '#0ea5e9',
-    shadowColor: '#0ea5e9',
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  brushPreviewStrokeActive: {
-    backgroundColor: '#0f766e',
-    shadowColor: '#0f766e',
-    shadowOpacity: 0.22,
   },
   paletteSizeRow: {
     flexDirection: 'row',
