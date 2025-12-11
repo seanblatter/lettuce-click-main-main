@@ -373,6 +373,12 @@ export function GardenSection({
   const [stencilOpacity, setStencilOpacity] = useState(0.6);
   const [stencilReferenceUri, setStencilReferenceUri] = useState<string | null>(null);
   const [isPickingStencilReference, setIsPickingStencilReference] = useState(false);
+  const stencilTranslationX = useSharedValue(0);
+  const stencilTranslationY = useSharedValue(0);
+  const stencilScale = useSharedValue(1);
+  const stencilPanStartX = useSharedValue(0);
+  const stencilPanStartY = useSharedValue(0);
+  const stencilScaleStart = useSharedValue(1);
   const [shopEmoji, setShopEmoji] = useState('🏡');
   const [inventoryEmoji, setInventoryEmoji] = useState('🧰');
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
@@ -1171,6 +1177,7 @@ export function GardenSection({
     handleClearDrawings();
     setIsDrawingMode(false);
     setSelectedEmoji(null);
+    setStencilModeEnabled(false);
   }, [clearGarden, handleClearDrawings, placements, setIsDrawingMode]);
 
   const handleSaveSnapshot = useCallback(async () => {
@@ -1326,12 +1333,15 @@ export function GardenSection({
 
   const handleToggleStencilMode = useCallback(async () => {
     const next = !stencilModeEnabled;
+    const hasCanvasContent = placements.length > 0 || strokes.length > 0;
 
     if (next) {
       const hasReference = Boolean(stencilReferenceUri);
-
-      if (!hasReference) {
-        Alert.alert('Add a stencil photo', 'Choose a reference photo to overlay on your camera.');
+      if (!hasReference && !hasCanvasContent) {
+        Alert.alert(
+          'Add a stencil reference',
+          'Choose a reference photo or create something on the canvas to overlay on your camera.'
+        );
         return;
       }
 
@@ -1342,11 +1352,17 @@ export function GardenSection({
     }
 
     setStencilModeEnabled(next);
-  }, [ensureCameraPermission, stencilModeEnabled, stencilReferenceUri]);
+  }, [ensureCameraPermission, placements.length, stencilModeEnabled, stencilReferenceUri, strokes.length]);
 
   const handleAdjustStencilOpacity = useCallback((delta: number) => {
     setStencilOpacity((prev) => clamp(Number((prev + delta).toFixed(2)), 0.1, 1));
   }, []);
+
+  useEffect(() => {
+    stencilTranslationX.value = 0;
+    stencilTranslationY.value = 0;
+    stencilScale.value = 1;
+  }, [stencilReferenceUri, stencilScale, stencilTranslationX, stencilTranslationY]);
 
   // Filter out emojis from text input
   const handleTextInputChange = useCallback((text: string) => {
@@ -1406,6 +1422,38 @@ export function GardenSection({
   const handlePlacementDragMove = useCallback((placementId: string, center: { x: number; y: number }) => {
     setActiveDrag({ id: placementId, point: center });
   }, []);
+
+  const stencilPanGesture = Gesture.Pan()
+    .onStart(() => {
+      stencilPanStartX.value = stencilTranslationX.value;
+      stencilPanStartY.value = stencilTranslationY.value;
+    })
+    .onChange((event) => {
+      stencilTranslationX.value = stencilPanStartX.value + event.translationX;
+      stencilTranslationY.value = stencilPanStartY.value + event.translationY;
+    });
+
+  const stencilPinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      stencilScaleStart.value = stencilScale.value;
+    })
+    .onChange((event) => {
+      const nextScale = stencilScaleStart.value * event.scale;
+      stencilScale.value = Math.min(Math.max(nextScale, STENCIL_MIN_SCALE), STENCIL_MAX_SCALE);
+    });
+
+  const stencilTransformGesture = Gesture.Simultaneous(stencilPanGesture, stencilPinchGesture);
+
+  const stencilImageAnimatedStyle = useAnimatedStyle(() => {
+    const clampedScale = Math.min(Math.max(stencilScale.value, STENCIL_MIN_SCALE), STENCIL_MAX_SCALE);
+    return {
+      transform: [
+        { translateX: stencilTranslationX.value },
+        { translateY: stencilTranslationY.value },
+        { scale: clampedScale },
+      ],
+    };
+  });
 
   const handlePlacementDragEnd = useCallback(
     (placementId: string, center: { x: number; y: number }) => {
@@ -1938,14 +1986,16 @@ export function GardenSection({
             onTouchEnd={handleCanvasTouchEnd}
             onTouchCancel={handleCanvasTouchEnd}>
             {stencilModeEnabled && cameraPermission?.granted ? (
-              <View pointerEvents="none" style={styles.stencilLayer} accessibilityElementsHidden>
-                <CameraView style={styles.stencilCamera} facing="back" />
+              <View pointerEvents="box-none" style={styles.stencilLayer} accessibilityElementsHidden>
+                <CameraView style={styles.stencilCamera} facing="back" pointerEvents="none" />
                 {stencilReferenceUri ? (
-                  <Image
-                    source={{ uri: stencilReferenceUri }}
-                    style={[styles.stencilImageOverlay, { opacity: stencilOpacity }]}
-                    resizeMode="contain"
-                  />
+                  <GestureDetector gesture={stencilTransformGesture}>
+                    <Animated.View
+                      style={[styles.stencilImageOverlay, { opacity: stencilOpacity }, stencilImageAnimatedStyle]}
+                    >
+                      <Image source={{ uri: stencilReferenceUri }} style={styles.stencilImage} resizeMode="contain" />
+                    </Animated.View>
+                  </GestureDetector>
                 ) : null}
               </View>
             ) : null}
@@ -3227,6 +3277,8 @@ export function GardenSection({
 const EMOJI_SIZE = 64;
 const PHOTO_BASE_SIZE = 150;
 const TEXT_BASE_SIZE = 220;
+const STENCIL_MIN_SCALE = 0.5;
+const STENCIL_MAX_SCALE = 2.5;
 const MIN_SCALE = 0.6;
 const MAX_SCALE = 2.4;
 
@@ -3976,6 +4028,10 @@ const styles = StyleSheet.create({
   },
   stencilImageOverlay: {
     ...StyleSheet.absoluteFillObject,
+  },
+  stencilImage: {
+    width: '100%',
+    height: '100%',
   },
   drawingSurface: {
     ...StyleSheet.absoluteFillObject,
