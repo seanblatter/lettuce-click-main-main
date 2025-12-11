@@ -84,7 +84,12 @@ type Stroke = {
   color: string;
   size: number;
   points: StrokePoint[];
+  modeledPoints?: StrokePoint[];
+  style?: StrokeStyleId;
+  seed?: number;
 };
+
+type StrokeStyleId = 'pencil' | 'pen' | 'marker' | 'chalk';
 
 const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
 const EMOJI_SEQUENCE_REGEX =
@@ -95,6 +100,64 @@ const stripVariationSelectors = (value: string) => value.replace(VARIATION_SELEC
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
+
+const applyAlpha = (color: string, alpha: number) => {
+  if (color.startsWith('#') && (color.length === 7 || color.length === 4)) {
+    const hex = color.length === 4
+      ? `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
+      : color;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  return color;
+};
+
+const getBrushPreset = (style?: StrokeStyleId) =>
+  BRUSH_STYLE_OPTIONS.find((option) => option.id === style) ?? BRUSH_STYLE_OPTIONS.find((option) => option.id === 'pen')!;
+
+const seededRandom = (seed: number, index: number) => {
+  const x = Math.sin(seed * 997 + index * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+// Lightweight stroke modeling inspired by Google's ink-stroke-modeler to keep
+// brush styles smooth across platforms without extra native dependencies.
+const modelStrokePoints = (points: StrokePoint[], style: StrokeStyleId, seed: number) => {
+  if (points.length === 0) {
+    return points;
+  }
+
+  const preset = getBrushPreset(style);
+  const modeled: StrokePoint[] = [];
+  let lastPoint = points[0];
+  modeled.push(lastPoint);
+
+  for (let index = 1; index < points.length; index += 1) {
+    const nextPoint = points[index];
+    const smoothed = {
+      x: lerp(lastPoint.x, nextPoint.x, preset.smoothing),
+      y: lerp(lastPoint.y, nextPoint.y, preset.smoothing),
+    };
+    const jitterAmount = preset.jitter * 3;
+    const noiseX = (seededRandom(seed, index) - 0.5) * jitterAmount;
+    const noiseY = (seededRandom(seed, index + 41) - 0.5) * jitterAmount;
+
+    const modeledPoint = {
+      x: smoothed.x + noiseX,
+      y: smoothed.y + noiseY,
+    };
+
+    modeled.push(modeledPoint);
+    lastPoint = modeledPoint;
+  }
+
+  return modeled;
+};
 
 const formatEmojiDescription = (entry: { tags: string[]; description?: string }) => {
   if (!entry.tags || entry.tags.length === 0) {
@@ -173,6 +236,48 @@ const COLOR_WHEEL_DIAMETER = 160;
 const COLOR_WHEEL_RADIUS = 64;
 const COLOR_WHEEL_SWATCH_SIZE = 34;
 const PEN_SIZES = [3, 5, 8, 12];
+const BRUSH_STYLE_OPTIONS: { id: StrokeStyleId; label: string; helper: string; sizeScale: number; opacity: number; smoothing: number; jitter: number; taper: boolean }[] = [
+  {
+    id: 'pencil',
+    label: 'Pencil',
+    helper: 'Sketch with a soft pencil grain.',
+    sizeScale: 0.9,
+    opacity: 0.75,
+    smoothing: 0.55,
+    jitter: 0.4,
+    taper: true,
+  },
+  {
+    id: 'pen',
+    label: 'Pen',
+    helper: 'Precise ink that hugs your path.',
+    sizeScale: 1,
+    opacity: 1,
+    smoothing: 0.65,
+    jitter: 0.1,
+    taper: true,
+  },
+  {
+    id: 'marker',
+    label: 'Marker',
+    helper: 'Thick strokes with steady flow.',
+    sizeScale: 1.4,
+    opacity: 0.9,
+    smoothing: 0.5,
+    jitter: 0.05,
+    taper: false,
+  },
+  {
+    id: 'chalk',
+    label: 'Chalk',
+    helper: 'Textured lines with dusty edges.',
+    sizeScale: 1.2,
+    opacity: 0.7,
+    smoothing: 0.45,
+    jitter: 0.6,
+    taper: false,
+  },
+];
 const TEXT_SCALE_MIN = 0.7;
 const TEXT_SCALE_MAX = 2;
 const TEXT_SLIDER_THUMB_SIZE = 24;
@@ -357,6 +462,7 @@ export function GardenSection({
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [penColor, setPenColor] = useState<string>(QUICK_DRAW_COLORS[0]);
   const [penSize, setPenSize] = useState(PEN_SIZES[1]);
+  const [strokeStyle, setStrokeStyle] = useState<StrokeStyleId>('pen');
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
   const [penHiddenForSave, setPenHiddenForSave] = useState(false);
@@ -443,6 +549,21 @@ export function GardenSection({
     () => [styles.canvas, { backgroundColor: stencilModeEnabled ? 'transparent' : CANVAS_BACKGROUND }],
     [stencilModeEnabled]
   );
+  const stencilViewportStyle = useMemo(() => {
+    if (!canvasSize.width || !canvasSize.height) {
+      return { width: 240, height: 240, left: 0, top: 0 };
+    }
+
+    const width = Math.max(canvasSize.width * 0.82, 140);
+    const height = Math.max(canvasSize.height * 0.82, 140);
+
+    return {
+      width,
+      height,
+      left: (canvasSize.width - width) / 2,
+      top: (canvasSize.height - height) / 2,
+    };
+  }, [canvasSize.height, canvasSize.width]);
 
   const { height: windowHeight } = useWindowDimensions();
   const paletteMaxHeight = Math.max(windowHeight - insets.top - 32, 360);
@@ -1168,6 +1289,14 @@ export function GardenSection({
     [setIsDrawingMode, setShowExtendedPalette]
   );
 
+  const handleSelectStrokeStyle = useCallback(
+    (styleId: StrokeStyleId) => {
+      setStrokeStyle(styleId);
+      setIsDrawingMode(true);
+    },
+    []
+  );
+
   const handleClearDrawings = useCallback(() => {
     setStrokes([]);
     setCurrentStroke(null);
@@ -1428,6 +1557,7 @@ export function GardenSection({
   }, []);
 
   const stencilPanGesture = Gesture.Pan()
+    .minPointers(2)
     .onStart(() => {
       stencilPanStartX.value = stencilTranslationX.value;
       stencilPanStartY.value = stencilTranslationY.value;
@@ -1474,34 +1604,58 @@ export function GardenSection({
 
   const renderStrokeSegments = useCallback(
     (stroke: Stroke, prefix: string) => {
-      if (stroke.points.length === 0) {
+      const preset = getBrushPreset(stroke.style);
+      const points = stroke.modeledPoints && stroke.modeledPoints.length > 0 ? stroke.modeledPoints : stroke.points;
+      if (points.length === 0) {
         return [] as React.ReactElement[];
       }
 
       const segments: React.ReactElement[] = [];
-      const firstPoint = stroke.points[0];
+      const firstPoint = points[0];
+      const strokeColor = applyAlpha(stroke.color, preset.opacity);
+      const baseSize = stroke.size * preset.sizeScale;
+      const pointCount = Math.max(points.length - 1, 1);
+      const taperForIndex = (index: number) => {
+        if (!preset.taper) {
+          return 1;
+        }
+
+        const progress = index / pointCount;
+        if (progress < 0.2) {
+          return lerp(0.45, 1, progress / 0.2);
+        }
+
+        if (progress > 0.8) {
+          return lerp(1, 0.55, (progress - 0.8) / 0.2);
+        }
+
+        return 1;
+      };
       segments.push(
         <View
           key={`${prefix}-point-0`}
           style={[
             styles.strokeSegment,
             {
-              width: stroke.size,
-              height: stroke.size,
-              borderRadius: stroke.size / 2,
-              left: firstPoint.x - stroke.size / 2,
-              top: firstPoint.y - stroke.size / 2,
-              backgroundColor: stroke.color,
+              width: baseSize * taperForIndex(0),
+              height: baseSize * taperForIndex(0),
+              borderRadius: (baseSize * taperForIndex(0)) / 2,
+              left: firstPoint.x - (baseSize * taperForIndex(0)) / 2,
+              top: firstPoint.y - (baseSize * taperForIndex(0)) / 2,
+              backgroundColor: strokeColor,
               transform: [],
+              shadowColor: stroke.color,
+              shadowOpacity: preset.id === 'chalk' ? 0.25 : preset.id === 'marker' ? 0.12 : 0,
+              shadowRadius: preset.id === 'chalk' ? 4 : preset.id === 'marker' ? 3 : 0,
             },
           ]}
         />
 
       );
 
-      for (let index = 1; index < stroke.points.length; index += 1) {
-        const prev = stroke.points[index - 1];
-        const point = stroke.points[index];
+      for (let index = 1; index < points.length; index += 1) {
+        const prev = points[index - 1];
+        const point = points[index];
         const dx = point.x - prev.x;
         const dy = point.y - prev.y;
         const distance = Math.hypot(dx, dy);
@@ -1511,6 +1665,7 @@ export function GardenSection({
         }
 
         const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+        const thickness = baseSize * taperForIndex(index);
         segments.push(
           <View
             key={`${prefix}-segment-${index}`}
@@ -1518,12 +1673,15 @@ export function GardenSection({
               styles.strokeSegment,
               {
                 width: distance,
-                height: stroke.size,
-                backgroundColor: stroke.color,
+                height: thickness,
+                backgroundColor: strokeColor,
                 left: (prev.x + point.x) / 2 - distance / 2,
-                top: (prev.y + point.y) / 2 - stroke.size / 2,
-                borderRadius: stroke.size / 2,
+                top: (prev.y + point.y) / 2 - thickness / 2,
+                borderRadius: thickness / 2,
                 transform: [{ rotateZ: `${angle}deg` }],
+                shadowColor: stroke.color,
+                shadowOpacity: preset.id === 'chalk' ? 0.22 : preset.id === 'marker' ? 0.1 : 0,
+                shadowRadius: preset.id === 'chalk' ? 4 : preset.id === 'marker' ? 3 : 0,
               },
             ]}
           />
@@ -1538,15 +1696,20 @@ export function GardenSection({
   const beginStroke = useCallback(
     (x: number, y: number) => {
       const strokeColor = penColor === ERASER_COLOR ? CANVAS_BACKGROUND : penColor;
+      const seed = Math.random();
+      const strokeStyleId = strokeStyle ?? 'pen';
       const stroke: Stroke = {
         id: `stroke-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         color: strokeColor,
         size: penSize,
         points: [{ x, y }],
+        style: strokeStyleId,
+        seed,
       };
+      stroke.modeledPoints = modelStrokePoints(stroke.points, strokeStyleId, seed);
       setCurrentStroke(stroke);
     },
-    [penColor, penSize]
+    [penColor, penSize, strokeStyle]
   );
 
   const appendPoint = useCallback((x: number, y: number) => {
@@ -1560,21 +1723,31 @@ export function GardenSection({
         return prev;
       }
 
+      const style = prev.style ?? strokeStyle ?? 'pen';
+      const seed = prev.seed ?? Math.random();
+      const nextPoints = [...prev.points, { x, y }];
+
       return {
         ...prev,
-        points: [...prev.points, { x, y }],
+        seed,
+        style,
+        points: nextPoints,
+        modeledPoints: modelStrokePoints(nextPoints, style, seed),
       };
     });
-  }, []);
+  }, [strokeStyle]);
 
   const endStroke = useCallback(() => {
     setCurrentStroke((prev) => {
       if (prev && prev.points.length > 0) {
-        setStrokes((existing) => [...existing, prev]);
+        const style = prev.style ?? strokeStyle ?? 'pen';
+        const seed = prev.seed ?? Math.random();
+        const modeledPoints = modelStrokePoints(prev.points, style, seed);
+        setStrokes((existing) => [...existing, { ...prev, style, seed, modeledPoints }]);
       }
       return null;
     });
-  }, []);
+  }, [strokeStyle]);
 
   const handleCanvasTouchStart = useCallback(
     (event: GestureResponderEvent) => {
@@ -1651,8 +1824,14 @@ export function GardenSection({
   );
 
   const shouldShowCanvasEmptyState = useMemo(
-    () => placements.length === 0 && strokes.length === 0 && !selectedEmoji && !currentStroke,
-    [currentStroke, placements.length, strokes.length, selectedEmoji]
+    () =>
+      placements.length === 0 &&
+      strokes.length === 0 &&
+      !selectedEmoji &&
+      !currentStroke &&
+      !stencilReferenceUri &&
+      !stencilModeEnabled,
+    [currentStroke, placements.length, stencilModeEnabled, stencilReferenceUri, strokes.length, selectedEmoji]
   );
   const handleCloseSheet = useCallback(() => {
     setActiveSheet(null);
@@ -1900,6 +2079,8 @@ export function GardenSection({
     }));
   }, [filteredShopInventory]);
 
+  const shouldShowStencilDetails = stencilModeEnabled;
+
   return (
     <Fragment>
       <View style={containerStyle}>
@@ -1998,8 +2179,12 @@ export function GardenSection({
               {stencilModeEnabled && cameraPermission?.granted && stencilReferenceUri ? (
                 <GestureDetector gesture={stencilTransformGesture}>
                   <Animated.View
-                    pointerEvents="none"
-                    style={[styles.stencilImageOverlay, { opacity: stencilOpacity }, stencilImageAnimatedStyle]}
+                    style={[
+                      styles.stencilImageOverlay,
+                      stencilViewportStyle,
+                      { opacity: stencilOpacity },
+                      stencilImageAnimatedStyle,
+                    ]}
                   >
                     <Image source={{ uri: stencilReferenceUri }} style={styles.stencilImage} resizeMode="contain" />
                   </Animated.View>
@@ -2237,25 +2422,52 @@ export function GardenSection({
                 </View>
                 {showExtendedPalette ? (
                   <View style={styles.colorWheelWrap}>
-                    <View style={styles.colorWheel}>
-                      {colorWheelPositions.map(({ color, left, top }) => {
-                        const isActive = penColor === color;
-                        return (
+                    <View style={styles.colorWheelPanel}>
+                      <View style={styles.colorWheelColumn}>
+                        <View style={styles.colorWheel}>
+                          {colorWheelPositions.map(({ color, left, top }) => {
+                            const isActive = penColor === color;
+                            return (
+                              <Pressable
+                                key={color}
+                                style={[
+                                  styles.colorWheelSwatch,
+                                  { backgroundColor: color, left, top },
+                                  isActive && styles.colorWheelSwatchActive,
+                                ]}
+                                onPress={() => handleSelectPenColor(color)}
+                                accessibilityLabel={`Set pen color to ${color}`}
+                              />
+                            );
+                          })}
                           <Pressable
-                            key={color}
-                            style={[styles.colorWheelSwatch, { backgroundColor: color, left, top }, isActive && styles.colorWheelSwatchActive]}
-                            onPress={() => handleSelectPenColor(color)}
-                            accessibilityLabel={`Set pen color to ${color}`}
-                          />
-                        );
-                      })}
-                      <Pressable
-                        style={styles.colorWheelClose}
-                        onPress={() => setShowExtendedPalette(false)}
-                        accessibilityLabel="Collapse color wheel"
-                      >
-                        <Text style={styles.colorWheelCloseText}>Close</Text>
-                      </Pressable>
+                            style={styles.colorWheelClose}
+                            onPress={() => setShowExtendedPalette(false)}
+                            accessibilityLabel="Collapse color wheel"
+                          >
+                            <Text style={styles.colorWheelCloseText}>Close</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                      <View style={styles.brushStyleColumn}>
+                        <Text style={styles.brushStyleTitle}>Brush stroke</Text>
+                        {BRUSH_STYLE_OPTIONS.map((option) => {
+                          const isActive = option.id === strokeStyle;
+                          return (
+                            <Pressable
+                              key={option.id}
+                              style={[styles.brushStyleChip, isActive && styles.brushStyleChipActive]}
+                              onPress={() => handleSelectStrokeStyle(option.id)}
+                              accessibilityRole="button"
+                              accessibilityLabel={`${option.label} brush style`}
+                              accessibilityState={{ selected: isActive }}
+                            >
+                              <Text style={styles.brushStyleChipLabel}>{option.label}</Text>
+                              <Text style={styles.brushStyleChipHelper}>{option.helper}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
                     </View>
                   </View>
                 ) : null}
@@ -2288,24 +2500,29 @@ export function GardenSection({
               </View>
               <View style={styles.paletteSection}>
                 <Text style={styles.paletteLabel}>Sketchbook extras</Text>
-                <View style={styles.additionsRow}>
-                  <Pressable
-                    style={[styles.additionCircle, isPickingPhoto && styles.additionCircleDisabled]}
-                    onPress={handleAddPhoto}
-                    disabled={isPickingPhoto}
-                    accessibilityRole="button"
-                    accessibilityLabel="Add a photo decoration"
-                  >
+                <Pressable
+                  style={[styles.additionCard, isPickingPhoto && styles.additionCardDisabled]}
+                  onPress={handleAddPhoto}
+                  disabled={isPickingPhoto}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add a photo decoration"
+                >
+                  <View style={[styles.additionCircle, isPickingPhoto && styles.additionCircleDisabled]}>
                     <Text style={styles.additionCircleIcon}>🖼️</Text>
-                  </Pressable>
+                  </View>
                   <View style={styles.additionBody}>
                     <Text style={styles.additionTitle}>Photo charm</Text>
                     <Text style={styles.additionCopy}>
                       Drop a photo from your library onto the canvas.
                     </Text>
                   </View>
-                </View>
-                <View style={styles.stencilCard}>
+                </Pressable>
+                <View
+                  style={[
+                    styles.stencilCard,
+                    !shouldShowStencilDetails && styles.stencilCardCollapsed,
+                  ]}
+                >
                   <View style={styles.stencilHeader}>
                     <View style={styles.stencilIconBubble}>
                       <Text style={styles.stencilIcon}>🎨</Text>
@@ -2328,57 +2545,63 @@ export function GardenSection({
                       />
                     </Pressable>
                   </View>
-                  <View style={styles.stencilBody}>
-                    <View style={styles.stencilPreviewRow}>
-                      <View style={styles.stencilPreviewFrame}>
-                        {stencilReferenceUri ? (
-                          <Image source={{ uri: stencilReferenceUri }} style={styles.stencilPreviewImage} />
-                        ) : (
-                          <Text style={styles.stencilPreviewPlaceholder}>Pick a reference photo</Text>
-                        )}
-                      </View>
-                      <View style={styles.stencilActions}>
-                        <Pressable
-                          style={[styles.stencilButton, isPickingStencilReference && styles.stencilButtonDisabled]}
-                          onPress={handlePickStencilReference}
-                          disabled={isPickingStencilReference}
-                          accessibilityRole="button"
-                          accessibilityLabel="Choose stencil reference photo"
-                        >
-                          <Text style={styles.stencilButtonText}>
-                            {stencilReferenceUri ? 'Replace photo' : 'Choose photo'}
-                          </Text>
-                        </Pressable>
-                        {stencilModeEnabled ? (
-                          <View style={styles.stencilOpacityRow}>
-                            <Text style={styles.stencilOpacityLabel}>Opacity</Text>
-                            <View style={styles.stencilOpacityControls}>
-                              <Pressable
-                                style={styles.stencilOpacityPill}
-                                onPress={() => handleAdjustStencilOpacity(-0.1)}
-                                accessibilityLabel="Lower stencil opacity"
-                              >
-                                <Text style={styles.stencilOpacityText}>-</Text>
-                              </Pressable>
-                              <View style={styles.stencilOpacityValue}>
-                                <Text style={styles.stencilOpacityValueText}>{Math.round(stencilOpacity * 100)}%</Text>
+                  {shouldShowStencilDetails ? (
+                    <View style={styles.stencilBody}>
+                      <View style={styles.stencilPreviewRow}>
+                        <View style={styles.stencilPreviewFrame}>
+                          {stencilReferenceUri ? (
+                            <Image source={{ uri: stencilReferenceUri }} style={styles.stencilPreviewImage} />
+                          ) : (
+                            <Text style={styles.stencilPreviewPlaceholder}>Pick a reference photo</Text>
+                          )}
+                        </View>
+                        <View style={styles.stencilActions}>
+                          <Pressable
+                            style={[styles.stencilButton, isPickingStencilReference && styles.stencilButtonDisabled]}
+                            onPress={handlePickStencilReference}
+                            disabled={isPickingStencilReference}
+                            accessibilityRole="button"
+                            accessibilityLabel="Choose stencil reference photo"
+                          >
+                            <Text style={styles.stencilButtonText}>
+                              {stencilReferenceUri ? 'Replace photo' : 'Choose photo'}
+                            </Text>
+                          </Pressable>
+                          {stencilModeEnabled ? (
+                            <View style={styles.stencilOpacityRow}>
+                              <Text style={styles.stencilOpacityLabel}>Opacity</Text>
+                              <View style={styles.stencilOpacityControls}>
+                                <Pressable
+                                  style={styles.stencilOpacityPill}
+                                  onPress={() => handleAdjustStencilOpacity(-0.1)}
+                                  accessibilityLabel="Lower stencil opacity"
+                                >
+                                  <Text style={styles.stencilOpacityText}>-</Text>
+                                </Pressable>
+                                <View style={styles.stencilOpacityValue}>
+                                  <Text style={styles.stencilOpacityValueText}>{Math.round(stencilOpacity * 100)}%</Text>
+                                </View>
+                                <Pressable
+                                  style={styles.stencilOpacityPill}
+                                  onPress={() => handleAdjustStencilOpacity(0.1)}
+                                  accessibilityLabel="Increase stencil opacity"
+                                >
+                                  <Text style={styles.stencilOpacityText}>+</Text>
+                                </Pressable>
                               </View>
-                              <Pressable
-                                style={styles.stencilOpacityPill}
-                                onPress={() => handleAdjustStencilOpacity(0.1)}
-                                accessibilityLabel="Increase stencil opacity"
-                              >
-                                <Text style={styles.stencilOpacityText}>+</Text>
-                              </Pressable>
                             </View>
-                          </View>
-                        ) : null}
+                          ) : null}
+                        </View>
                       </View>
+                      <Text style={styles.stencilHelperText}>
+                        Turn on stencil mode to fade your reference over the camera feed while you arrange items on the canvas.
+                      </Text>
                     </View>
-                    <Text style={styles.stencilHelperText}>
-                      Turn on stencil mode to fade your reference over the camera feed while you arrange items on the canvas.
+                  ) : (
+                    <Text style={styles.stencilCollapsedHelper}>
+                      Toggle stencil mode to pick a reference and float it over the camera feed.
                     </Text>
-                  </View>
+                  )}
                 </View>
                 <View style={styles.textComposer}>
                   <Pressable
@@ -4038,7 +4261,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   stencilImageOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'visible',
   },
   stencilImage: {
     width: '100%',
@@ -4736,6 +4962,15 @@ const styles = StyleSheet.create({
   },
   colorWheelWrap: {
     marginTop: 16,
+    alignItems: 'stretch',
+  },
+  colorWheelPanel: {
+    flexDirection: 'row',
+    gap: 14,
+    alignItems: 'stretch',
+  },
+  colorWheelColumn: {
+    flex: 1,
     alignItems: 'center',
   },
   colorWheel: {
@@ -4787,6 +5022,49 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0f172a',
   },
+  brushStyleColumn: {
+    flex: 1,
+    gap: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#d1fae5',
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+  },
+  brushStyleTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#134e32',
+    letterSpacing: 0.3,
+  },
+  brushStyleChip: {
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#f8fffb',
+    gap: 4,
+  },
+  brushStyleChipActive: {
+    borderColor: '#0f766e',
+    backgroundColor: '#ecfdf3',
+    shadowColor: '#0f766e',
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  brushStyleChipLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  brushStyleChipHelper: {
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 16,
+  },
   paletteSizeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -4816,11 +5094,24 @@ const styles = StyleSheet.create({
     color: '#134e32',
     fontWeight: '600',
   },
-  additionsRow: {
+  additionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    paddingVertical: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#d1fae5',
+    backgroundColor: '#f8fffb',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  additionCardDisabled: {
+    opacity: 0.65,
   },
   additionCircle: {
     width: 64,
@@ -4871,6 +5162,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
+  stencilCardCollapsed: {
+    paddingVertical: 12,
+  },
   stencilHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4897,6 +5191,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
   },
   stencilCopy: {
+    fontSize: 13,
+    color: '#1f2937',
+    lineHeight: 18,
+  },
+  stencilCollapsedHelper: {
+    marginTop: 8,
     fontSize: 13,
     color: '#1f2937',
     lineHeight: 18,
