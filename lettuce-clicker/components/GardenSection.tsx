@@ -439,7 +439,10 @@ export function GardenSection({
     [gardenBackgroundColor]
   );
   const containerStyle = useMemo(() => [styles.container, { backgroundColor: baseBackgroundColor }], [baseBackgroundColor]);
-  const canvasStyle = useMemo(() => [styles.canvas, { backgroundColor: CANVAS_BACKGROUND }], []);
+  const canvasStyle = useMemo(
+    () => [styles.canvas, { backgroundColor: stencilModeEnabled ? 'transparent' : CANVAS_BACKGROUND }],
+    [stencilModeEnabled]
+  );
 
   const { height: windowHeight } = useWindowDimensions();
   const paletteMaxHeight = Math.max(windowHeight - insets.top - 32, 360);
@@ -1178,7 +1181,8 @@ export function GardenSection({
     setIsDrawingMode(false);
     setSelectedEmoji(null);
     setStencilModeEnabled(false);
-  }, [clearGarden, handleClearDrawings, placements, setIsDrawingMode]);
+    setStencilReferenceUri(null);
+  }, [clearGarden, handleClearDrawings, placements, setIsDrawingMode, setStencilReferenceUri]);
 
   const handleSaveSnapshot = useCallback(async () => {
     if (!canvasRef.current || isSavingSnapshot) {
@@ -1672,7 +1676,7 @@ export function GardenSection({
 
   const bannerTopPadding = insets.top + 24;
   const contentBottomPadding = insets.bottom + 48;
-  const canClearGarden = placements.length > 0 || strokes.length > 0;
+  const canClearGarden = placements.length > 0 || strokes.length > 0 || stencilModeEnabled || !!stencilReferenceUri;
   const totalCollected = useMemo(
     () => Object.values(emojiInventory).filter(Boolean).length,
     [emojiInventory]
@@ -1986,160 +1990,163 @@ export function GardenSection({
             onTouchEnd={handleCanvasTouchEnd}
             onTouchCancel={handleCanvasTouchEnd}>
             {stencilModeEnabled && cameraPermission?.granted ? (
-              <View pointerEvents="box-none" style={styles.stencilLayer} accessibilityElementsHidden>
-                <CameraView style={styles.stencilCamera} facing="back" pointerEvents="none" />
-                {stencilReferenceUri ? (
-                  <GestureDetector gesture={stencilTransformGesture}>
-                    <Animated.View
-                      style={[styles.stencilImageOverlay, { opacity: stencilOpacity }, stencilImageAnimatedStyle]}
-                    >
-                      <Image source={{ uri: stencilReferenceUri }} style={styles.stencilImage} resizeMode="contain" />
-                    </Animated.View>
-                  </GestureDetector>
-                ) : null}
+              <View pointerEvents="none" style={styles.stencilLayer} accessibilityElementsHidden>
+                <CameraView style={styles.stencilCamera} facing="back" />
               </View>
             ) : null}
-            <View pointerEvents="none" style={styles.drawingSurface}>
-              {strokes.reduce<React.ReactElement[]>((acc, stroke) => {
-                acc.push(...renderStrokeSegments(stroke, stroke.id));
-                return acc;
-              }, [])}
-              {currentStroke ? renderStrokeSegments(currentStroke, `${currentStroke.id}-live`) : null}
-            </View>
-            {isDrawingMode && !penHiddenForSave ? (
-              <View pointerEvents="none" style={styles.drawingModeBadge}>
-                <Text style={styles.drawingModeBadgeText}>Drawing mode</Text>
+            <View pointerEvents="box-none" style={styles.canvasContentLayer}>
+              {stencilModeEnabled && cameraPermission?.granted && stencilReferenceUri ? (
+                <GestureDetector gesture={stencilTransformGesture}>
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[styles.stencilImageOverlay, { opacity: stencilOpacity }, stencilImageAnimatedStyle]}
+                  >
+                    <Image source={{ uri: stencilReferenceUri }} style={styles.stencilImage} resizeMode="contain" />
+                  </Animated.View>
+                </GestureDetector>
+              ) : null}
+              <View pointerEvents="none" style={styles.drawingSurface}>
+                {strokes.reduce<React.ReactElement[]>((acc, stroke) => {
+                  acc.push(...renderStrokeSegments(stroke, stroke.id));
+                  return acc;
+                }, [])}
+                {currentStroke ? renderStrokeSegments(currentStroke, `${currentStroke.id}-live`) : null}
               </View>
-            ) : null}
-            {shouldShowCanvasEmptyState ? (
-              <View pointerEvents="none" style={styles.canvasEmptyState}>
-                <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
-                <Text style={styles.canvasEmptyCopy}>
-                  Selected emoji, photos, or text will appear where you tap. Adjust them later by dragging,
-                  pinching, twisting, double tapping, swiping, or long pressing.
-                </Text>
-              </View>
-            ) : null}
-            {placements.map((placement) => {
-              if (placement.kind === 'emoji') {
-                const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
+              {isDrawingMode && !penHiddenForSave ? (
+                <View pointerEvents="none" style={styles.drawingModeBadge}>
+                  <Text style={styles.drawingModeBadgeText}>Drawing mode</Text>
+                </View>
+              ) : null}
+              {shouldShowCanvasEmptyState ? (
+                <View pointerEvents="none" style={styles.canvasEmptyState}>
+                  <Text style={styles.canvasEmptyTitle}>Tap the canvas to begin</Text>
+                  <Text style={styles.canvasEmptyCopy}>
+                    Selected emoji, photos, or text will appear where you tap. Adjust them later by dragging,
+                    pinching, twisting, double tapping, swiping, or long pressing.
+                  </Text>
+                </View>
+              ) : null}
+              {placements.map((placement) => {
+                if (placement.kind === 'emoji') {
+                  const emoji = emojiCatalog.find((item) => item.id === placement.emojiId);
 
-                if (!emoji) {
-                  return null;
+                  if (!emoji) {
+                    return null;
+                  }
+
+                  return (
+                    <DraggablePlacement
+                      key={placement.id}
+                      placement={placement}
+                      baseSize={EMOJI_SIZE}
+                      onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                      onDragBegin={handlePlacementDragBegin}
+                      onDragMove={handlePlacementDragMove}
+                      onDragEnd={handlePlacementDragEnd}
+                      onGestureActivated={handlePlacementGesture}
+                    >
+                      {emoji.imageUrl ? (
+                        <ExpoImage source={{ uri: emoji.imageUrl }} style={styles.canvasEmojiImage} contentFit="contain" />
+                      ) : (
+                        <Text style={styles.canvasEmojiGlyph}>{emoji.emoji}</Text>
+                      )}
+                    </DraggablePlacement>
+                  );
+                }
+
+                if (placement.kind === 'photo') {
+                  return (
+                    <DraggablePlacement
+                      key={placement.id}
+                      placement={placement}
+                      baseSize={PHOTO_BASE_SIZE}
+                      onUpdate={(updates) => updatePlacement(placement.id, updates)}
+                      onDragBegin={handlePlacementDragBegin}
+                      onDragMove={handlePlacementDragMove}
+                      onDragEnd={handlePlacementDragEnd}
+                      onGestureActivated={handlePlacementGesture}
+                    >
+                      <View style={styles.canvasPhotoFrame}>
+                        <Image source={{ uri: placement.imageUri }} style={styles.canvasPhotoImage} />
+                      </View>
+                    </DraggablePlacement>
+                  );
                 }
 
                 return (
                   <DraggablePlacement
                     key={placement.id}
                     placement={placement}
-                    baseSize={EMOJI_SIZE}
+                    baseSize={TEXT_BASE_SIZE}
                     onUpdate={(updates) => updatePlacement(placement.id, updates)}
                     onDragBegin={handlePlacementDragBegin}
                     onDragMove={handlePlacementDragMove}
                     onDragEnd={handlePlacementDragEnd}
                     onGestureActivated={handlePlacementGesture}
                   >
-                    {emoji.imageUrl ? (
-                      <ExpoImage source={{ uri: emoji.imageUrl }} style={styles.canvasEmojiImage} contentFit="contain" />
-                    ) : (
-                      <Text style={styles.canvasEmojiGlyph}>{emoji.emoji}</Text>
-                    )}
+                    <Text
+                      style={[
+                        styles.canvasText,
+                        TEXT_STYLE_MAP[placement.style ?? 'sprout'],
+                        { color: placement.color ?? DEFAULT_TEXT_COLOR },
+                      ]}
+                    >
+                      {placement.text}
+                    </Text>
                   </DraggablePlacement>
                 );
-              }
+              })}
+              {!penHiddenForSave ? (
+                <Pressable
+                  style={styles.penButton}
+                  accessibilityLabel={
+                    deleteZoneVisible ? 'Trash can drop zone' : 'Open drawing palette'
+                  }
+                  accessibilityHint={
+                    deleteZoneVisible
+                      ? 'Drag an item here to delete it from the garden.'
+                      : 'Opens options to pick colors and stroke sizes. Long press to exit drawing mode.'
+                  }
+                  onPress={() => {
+                    if (deleteZoneVisible) {
+                      return;
+                    }
 
-              if (placement.kind === 'photo') {
-                return (
-                <DraggablePlacement
-                  key={placement.id}
-                  placement={placement}
-                  baseSize={PHOTO_BASE_SIZE}
-                  onUpdate={(updates) => updatePlacement(placement.id, updates)}
-                  onDragBegin={handlePlacementDragBegin}
-                  onDragMove={handlePlacementDragMove}
-                  onDragEnd={handlePlacementDragEnd}
-                  onGestureActivated={handlePlacementGesture}
+                    setShowExtendedPalette(false);
+                    setShowPalette(true);
+                  }}
+                  onLongPress={() => {
+                    if (deleteZoneVisible) {
+                      return;
+                    }
+                    setIsDrawingMode(false);
+                  }}
+                  disabled={deleteZoneVisible}
+                  onLayout={({ nativeEvent }) => setPenButtonLayout(nativeEvent.layout)}
                 >
-                  <View style={styles.canvasPhotoFrame}>
-                    <Image source={{ uri: placement.imageUri }} style={styles.canvasPhotoImage} />
+                  <View
+                    style={[
+                      styles.penButtonCircle,
+                      isDrawingMode && !deleteZoneVisible && styles.penButtonCircleActive,
+                      deleteZoneVisible && styles.penButtonCircleDelete,
+                      shouldHighlightDeleteZone && styles.penButtonCircleDeleteActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.penButtonIcon,
+                        isDrawingMode && !deleteZoneVisible && styles.penButtonIconActive,
+                        deleteZoneVisible && styles.penButtonIconDelete,
+                        shouldHighlightDeleteZone && styles.penButtonIconDeleteActive,
+                      ]}
+                    >
+                      {deleteZoneVisible ? '🗑️' : '✏️'}
+                    </Text>
                   </View>
-                </DraggablePlacement>
-                );
-              }
-
-              return (
-                <DraggablePlacement
-                  key={placement.id}
-                  placement={placement}
-                  baseSize={TEXT_BASE_SIZE}
-                  onUpdate={(updates) => updatePlacement(placement.id, updates)}
-                  onDragBegin={handlePlacementDragBegin}
-                  onDragMove={handlePlacementDragMove}
-                  onDragEnd={handlePlacementDragEnd}
-                  onGestureActivated={handlePlacementGesture}
-                >
-                  <Text
-                    style={[
-                      styles.canvasText,
-                      TEXT_STYLE_MAP[placement.style ?? 'sprout'],
-                      { color: placement.color ?? DEFAULT_TEXT_COLOR },
-                    ]}
-                  >
-                    {placement.text}
-                  </Text>
-                </DraggablePlacement>
-              );
-            })}
-            {!penHiddenForSave ? (
-              <Pressable
-                style={styles.penButton}
-                accessibilityLabel={
-                  deleteZoneVisible ? 'Trash can drop zone' : 'Open drawing palette'
-                }
-                accessibilityHint={
-                  deleteZoneVisible
-                    ? 'Drag an item here to delete it from the garden.'
-                    : 'Opens options to pick colors and stroke sizes. Long press to exit drawing mode.'
-                }
-                onPress={() => {
-                  if (deleteZoneVisible) {
-                    return;
-                  }
-
-                  setShowExtendedPalette(false);
-                  setShowPalette(true);
-                }}
-                onLongPress={() => {
-                  if (deleteZoneVisible) {
-                    return;
-                  }
-                  setIsDrawingMode(false);
-                }}
-                disabled={deleteZoneVisible}
-                onLayout={({ nativeEvent }) => setPenButtonLayout(nativeEvent.layout)}
-              >
-                <View
-                  style={[
-                    styles.penButtonCircle,
-                    isDrawingMode && !deleteZoneVisible && styles.penButtonCircleActive,
-                    deleteZoneVisible && styles.penButtonCircleDelete,
-                    shouldHighlightDeleteZone && styles.penButtonCircleDeleteActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.penButtonIcon,
-                      isDrawingMode && !deleteZoneVisible && styles.penButtonIconActive,
-                      deleteZoneVisible && styles.penButtonIconDelete,
-                      shouldHighlightDeleteZone && styles.penButtonIconDeleteActive,
-                    ]}
-                  >
-                    {deleteZoneVisible ? '🗑️' : '✏️'}
-                  </Text>
-                </View>
-              </Pressable>
-            ) : null}
-          </Pressable>
+                </Pressable>
+              ) : null}
+              </View>
+            </Pressable>
 
         <View style={styles.canvasActions}>
           <Pressable
@@ -4019,9 +4026,13 @@ const styles = StyleSheet.create({
     elevation: 6,
     overflow: 'hidden',
   },
+  canvasContentLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+  },
   stencilLayer: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 1,
+    zIndex: 0,
   },
   stencilCamera: {
     ...StyleSheet.absoluteFillObject,
