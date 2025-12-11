@@ -79,10 +79,13 @@ type StrokePoint = {
   y: number;
 };
 
+type BrushStyle = 'pencil' | 'pen' | 'marker' | 'chalk';
+
 type Stroke = {
   id: string;
   color: string;
   size: number;
+  style: BrushStyle;
   points: StrokePoint[];
 };
 
@@ -357,6 +360,7 @@ export function GardenSection({
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [penColor, setPenColor] = useState<string>(QUICK_DRAW_COLORS[0]);
   const [penSize, setPenSize] = useState(PEN_SIZES[1]);
+  const [brushStyle, setBrushStyle] = useState<BrushStyle>('pen');
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
   const [penHiddenForSave, setPenHiddenForSave] = useState(false);
@@ -373,6 +377,7 @@ export function GardenSection({
   const [stencilOpacity, setStencilOpacity] = useState(0.6);
   const [stencilReferenceUri, setStencilReferenceUri] = useState<string | null>(null);
   const [isPickingStencilReference, setIsPickingStencilReference] = useState(false);
+  const [stencilImageSize, setStencilImageSize] = useState<{ width: number; height: number } | null>(null);
   const stencilTranslationX = useSharedValue(0);
   const stencilTranslationY = useSharedValue(0);
   const stencilScale = useSharedValue(1);
@@ -448,6 +453,16 @@ export function GardenSection({
   const paletteMaxHeight = Math.max(windowHeight - insets.top - 32, 360);
   const palettePaddingBottom = 24 + insets.bottom;
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
+  const brushStyleOptions: { id: BrushStyle; label: string; icon: string }[] = useMemo(
+    () => [
+      { id: 'pencil', label: 'Pencil', icon: '✏️' },
+      { id: 'pen', label: 'Pen', icon: '🖊️' },
+      { id: 'marker', label: 'Marker', icon: '🖍️' },
+      { id: 'chalk', label: 'Chalk', icon: '🧼' },
+    ],
+    []
+  );
 
   useEffect(() => {
     setActiveEmojiPicker(null);
@@ -1337,18 +1352,7 @@ export function GardenSection({
 
   const handleToggleStencilMode = useCallback(async () => {
     const next = !stencilModeEnabled;
-    const hasCanvasContent = placements.length > 0 || strokes.length > 0;
-
     if (next) {
-      const hasReference = Boolean(stencilReferenceUri);
-      if (!hasReference && !hasCanvasContent) {
-        Alert.alert(
-          'Add a stencil reference',
-          'Choose a reference photo or create something on the canvas to overlay on your camera.'
-        );
-        return;
-      }
-
       const granted = await ensureCameraPermission();
       if (!granted) {
         return;
@@ -1356,17 +1360,42 @@ export function GardenSection({
     }
 
     setStencilModeEnabled(next);
-  }, [ensureCameraPermission, placements.length, stencilModeEnabled, stencilReferenceUri, strokes.length]);
+  }, [ensureCameraPermission, stencilModeEnabled]);
 
   const handleAdjustStencilOpacity = useCallback((delta: number) => {
     setStencilOpacity((prev) => clamp(Number((prev + delta).toFixed(2)), 0.1, 1));
   }, []);
 
   useEffect(() => {
-    stencilTranslationX.value = 0;
-    stencilTranslationY.value = 0;
-    stencilScale.value = 1;
-  }, [stencilReferenceUri, stencilScale, stencilTranslationX, stencilTranslationY]);
+    if (!stencilReferenceUri || !canvasSize.width || !canvasSize.height) {
+      setStencilImageSize(null);
+      stencilTranslationX.value = 0;
+      stencilTranslationY.value = 0;
+      stencilScale.value = 1;
+      return;
+    }
+
+    Image.getSize(
+      stencilReferenceUri,
+      (width, height) => {
+        const maxWidth = canvasSize.width;
+        const maxHeight = canvasSize.height;
+        const scale = Math.min(maxWidth / width, maxHeight / height, 1);
+        const nextWidth = width * scale;
+        const nextHeight = height * scale;
+        setStencilImageSize({ width: nextWidth, height: nextHeight });
+        stencilTranslationX.value = (maxWidth - nextWidth) / 2;
+        stencilTranslationY.value = (maxHeight - nextHeight) / 2;
+        stencilScale.value = 1;
+      },
+      () => {
+        setStencilImageSize({ width: canvasSize.width, height: canvasSize.height });
+        stencilTranslationX.value = 0;
+        stencilTranslationY.value = 0;
+        stencilScale.value = 1;
+      }
+    );
+  }, [canvasSize.height, canvasSize.width, stencilReferenceUri, stencilScale, stencilTranslationX, stencilTranslationY]);
 
   // Filter out emojis from text input
   const handleTextInputChange = useCallback((text: string) => {
@@ -1479,6 +1508,30 @@ export function GardenSection({
       }
 
       const segments: React.ReactElement[] = [];
+      const strokeDecoration = (() => {
+        if (stroke.color === CANVAS_BACKGROUND) {
+          return {} as const;
+        }
+
+        switch (stroke.style) {
+          case 'pencil':
+            return { opacity: 0.65, borderRadius: stroke.size * 0.75 } as const;
+          case 'marker':
+            return { opacity: 0.85, borderRadius: Math.max(4, stroke.size / 3) } as const;
+          case 'chalk':
+            return {
+              opacity: 0.55,
+              shadowColor: stroke.color,
+              shadowOpacity: Platform.OS === 'ios' ? 0.35 : 0.2,
+              shadowRadius: 6,
+              shadowOffset: { width: 0, height: 0 },
+              elevation: 3,
+            } as const;
+          default:
+            return {} as const;
+        }
+      })();
+
       const firstPoint = stroke.points[0];
       segments.push(
         <View
@@ -1494,6 +1547,7 @@ export function GardenSection({
               backgroundColor: stroke.color,
               transform: [],
             },
+            strokeDecoration,
           ]}
         />
 
@@ -1525,6 +1579,7 @@ export function GardenSection({
                 borderRadius: stroke.size / 2,
                 transform: [{ rotateZ: `${angle}deg` }],
               },
+              strokeDecoration,
             ]}
           />
         );
@@ -1542,11 +1597,12 @@ export function GardenSection({
         id: `stroke-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         color: strokeColor,
         size: penSize,
+        style: brushStyle,
         points: [{ x, y }],
       };
       setCurrentStroke(stroke);
     },
-    [penColor, penSize]
+    [brushStyle, penColor, penSize]
   );
 
   const appendPoint = useCallback((x: number, y: number) => {
@@ -1651,8 +1707,14 @@ export function GardenSection({
   );
 
   const shouldShowCanvasEmptyState = useMemo(
-    () => placements.length === 0 && strokes.length === 0 && !selectedEmoji && !currentStroke,
-    [currentStroke, placements.length, strokes.length, selectedEmoji]
+    () =>
+      placements.length === 0 &&
+      strokes.length === 0 &&
+      !selectedEmoji &&
+      !currentStroke &&
+      !stencilReferenceUri &&
+      !stencilModeEnabled,
+    [currentStroke, placements.length, stencilModeEnabled, stencilReferenceUri, strokes.length, selectedEmoji]
   );
   const handleCloseSheet = useCallback(() => {
     setActiveSheet(null);
@@ -1998,8 +2060,15 @@ export function GardenSection({
               {stencilModeEnabled && cameraPermission?.granted && stencilReferenceUri ? (
                 <GestureDetector gesture={stencilTransformGesture}>
                   <Animated.View
-                    pointerEvents="none"
-                    style={[styles.stencilImageOverlay, { opacity: stencilOpacity }, stencilImageAnimatedStyle]}
+                    style={[
+                      styles.stencilImageOverlay,
+                      {
+                        opacity: stencilOpacity,
+                        width: stencilImageSize?.width || canvasSize.width,
+                        height: stencilImageSize?.height || canvasSize.height,
+                      },
+                      stencilImageAnimatedStyle,
+                    ]}
                   >
                     <Image source={{ uri: stencilReferenceUri }} style={styles.stencilImage} resizeMode="contain" />
                   </Animated.View>
@@ -2207,58 +2276,84 @@ export function GardenSection({
             >
               <View style={styles.paletteSection}>
                 <Text style={styles.paletteLabel}>Pen &amp; color</Text>
-                <View style={styles.paletteColorRow}>
-                  {QUICK_DRAW_COLORS.map((color) => {
-                    const isActive = penColor === color;
-                    return (
-                      <Pressable
-                        key={color}
-                        style={[styles.colorSwatch, { backgroundColor: color }, isActive && styles.colorSwatchActive]}
-                        onPress={() => handleSelectPenColor(color)}
-                        accessibilityLabel={`Set pen color to ${color}`}
-                      />
-                    );
-                  })}
-                  <Pressable
-                    key="eraser"
-                    style={[styles.eraserSwatch, penColor === ERASER_COLOR && styles.colorSwatchActive]}
-                    onPress={() => handleSelectPenColor(ERASER_COLOR)}
-                    accessibilityLabel="Use eraser"
-                  >
-                    <Text style={styles.eraserIcon}>🧽</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.colorWheelButton, showExtendedPalette && styles.colorWheelButtonActive]}
-                    onPress={() => setShowExtendedPalette((prev) => !prev)}
-                    accessibilityLabel={showExtendedPalette ? 'Hide color wheel' : 'Show color wheel'}
-                  >
-                    <Text style={styles.colorWheelIcon}>🎨</Text>
-                  </Pressable>
-                </View>
-                {showExtendedPalette ? (
-                  <View style={styles.colorWheelWrap}>
-                    <View style={styles.colorWheel}>
-                      {colorWheelPositions.map(({ color, left, top }) => {
+                <View style={styles.paletteColorGrid}>
+                  <View style={styles.paletteColorColumn}>
+                    <View style={styles.paletteColorRow}>
+                      {QUICK_DRAW_COLORS.map((color) => {
                         const isActive = penColor === color;
                         return (
                           <Pressable
                             key={color}
-                            style={[styles.colorWheelSwatch, { backgroundColor: color, left, top }, isActive && styles.colorWheelSwatchActive]}
+                            style={[styles.colorSwatch, { backgroundColor: color }, isActive && styles.colorSwatchActive]}
                             onPress={() => handleSelectPenColor(color)}
                             accessibilityLabel={`Set pen color to ${color}`}
                           />
                         );
                       })}
                       <Pressable
-                        style={styles.colorWheelClose}
-                        onPress={() => setShowExtendedPalette(false)}
-                        accessibilityLabel="Collapse color wheel"
+                        key="eraser"
+                        style={[styles.eraserSwatch, penColor === ERASER_COLOR && styles.colorSwatchActive]}
+                        onPress={() => handleSelectPenColor(ERASER_COLOR)}
+                        accessibilityLabel="Use eraser"
                       >
-                        <Text style={styles.colorWheelCloseText}>Close</Text>
+                        <Text style={styles.eraserIcon}>🧽</Text>
                       </Pressable>
                     </View>
+                    <Pressable
+                      style={[styles.colorWheelButton, showExtendedPalette && styles.colorWheelButtonActive]}
+                      onPress={() => setShowExtendedPalette((prev) => !prev)}
+                      accessibilityLabel={showExtendedPalette ? 'Hide color wheel' : 'Show color wheel'}
+                    >
+                      <Text style={styles.colorWheelIcon}>🎨</Text>
+                      <Text style={styles.colorWheelLabel}>Spin the color wheel</Text>
+                    </Pressable>
+                    {showExtendedPalette ? (
+                      <View style={styles.colorWheelWrap}>
+                        <View style={styles.colorWheel}>
+                          {colorWheelPositions.map(({ color, left, top }) => {
+                            const isActive = penColor === color;
+                            return (
+                              <Pressable
+                                key={color}
+                                style={[styles.colorWheelSwatch, { backgroundColor: color, left, top }, isActive && styles.colorWheelSwatchActive]}
+                                onPress={() => handleSelectPenColor(color)}
+                                accessibilityLabel={`Set pen color to ${color}`}
+                              />
+                            );
+                          })}
+                          <Pressable
+                            style={styles.colorWheelClose}
+                            onPress={() => setShowExtendedPalette(false)}
+                            accessibilityLabel="Collapse color wheel"
+                          >
+                            <Text style={styles.colorWheelCloseText}>Close</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : null}
                   </View>
-                ) : null}
+                  <View style={styles.brushStyleColumn}>
+                    <Text style={styles.brushStyleLabel}>Stroke style</Text>
+                    <View style={styles.brushStyleRow}>
+                      {brushStyleOptions.map((option) => {
+                        const isActive = brushStyle === option.id;
+                        return (
+                          <Pressable
+                            key={option.id}
+                            style={[styles.brushStyleOption, isActive && styles.brushStyleOptionActive]}
+                            onPress={() => setBrushStyle(option.id)}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected: isActive }}
+                            accessibilityLabel={`${option.label} stroke style`}
+                          >
+                            <Text style={styles.brushStyleIcon}>{option.icon}</Text>
+                            <Text style={[styles.brushStyleText, isActive && styles.brushStyleTextActive]}>{option.label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </View>
               </View>
               <View style={styles.paletteSection}>
                 <Text style={styles.paletteLabel}>Pen size</Text>
@@ -2288,23 +2383,23 @@ export function GardenSection({
               </View>
               <View style={styles.paletteSection}>
                 <Text style={styles.paletteLabel}>Sketchbook extras</Text>
-                <View style={styles.additionsRow}>
-                  <Pressable
-                    style={[styles.additionCircle, isPickingPhoto && styles.additionCircleDisabled]}
-                    onPress={handleAddPhoto}
-                    disabled={isPickingPhoto}
-                    accessibilityRole="button"
-                    accessibilityLabel="Add a photo decoration"
-                  >
+                <Pressable
+                  style={[styles.additionsRow, isPickingPhoto && styles.additionRowDisabled]}
+                  onPress={handleAddPhoto}
+                  disabled={isPickingPhoto}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add a photo decoration"
+                >
+                  <View style={[styles.additionCircle, isPickingPhoto && styles.additionCircleDisabled]}>
                     <Text style={styles.additionCircleIcon}>🖼️</Text>
-                  </Pressable>
+                  </View>
                   <View style={styles.additionBody}>
                     <Text style={styles.additionTitle}>Photo charm</Text>
                     <Text style={styles.additionCopy}>
                       Drop a photo from your library onto the canvas.
                     </Text>
                   </View>
-                </View>
+                </Pressable>
                 <View style={styles.stencilCard}>
                   <View style={styles.stencilHeader}>
                     <View style={styles.stencilIconBubble}>
@@ -2328,28 +2423,28 @@ export function GardenSection({
                       />
                     </Pressable>
                   </View>
-                  <View style={styles.stencilBody}>
-                    <View style={styles.stencilPreviewRow}>
-                      <View style={styles.stencilPreviewFrame}>
-                        {stencilReferenceUri ? (
-                          <Image source={{ uri: stencilReferenceUri }} style={styles.stencilPreviewImage} />
-                        ) : (
-                          <Text style={styles.stencilPreviewPlaceholder}>Pick a reference photo</Text>
-                        )}
-                      </View>
-                      <View style={styles.stencilActions}>
-                        <Pressable
-                          style={[styles.stencilButton, isPickingStencilReference && styles.stencilButtonDisabled]}
-                          onPress={handlePickStencilReference}
-                          disabled={isPickingStencilReference}
-                          accessibilityRole="button"
-                          accessibilityLabel="Choose stencil reference photo"
-                        >
-                          <Text style={styles.stencilButtonText}>
-                            {stencilReferenceUri ? 'Replace photo' : 'Choose photo'}
-                          </Text>
-                        </Pressable>
-                        {stencilModeEnabled ? (
+                  {stencilModeEnabled ? (
+                    <View style={styles.stencilBody}>
+                      <View style={styles.stencilPreviewRow}>
+                        <View style={styles.stencilPreviewFrame}>
+                          {stencilReferenceUri ? (
+                            <Image source={{ uri: stencilReferenceUri }} style={styles.stencilPreviewImage} />
+                          ) : (
+                            <Text style={styles.stencilPreviewPlaceholder}>Pick a reference photo</Text>
+                          )}
+                        </View>
+                        <View style={styles.stencilActions}>
+                          <Pressable
+                            style={[styles.stencilButton, isPickingStencilReference && styles.stencilButtonDisabled]}
+                            onPress={handlePickStencilReference}
+                            disabled={isPickingStencilReference}
+                            accessibilityRole="button"
+                            accessibilityLabel="Choose stencil reference photo"
+                          >
+                            <Text style={styles.stencilButtonText}>
+                              {stencilReferenceUri ? 'Replace photo' : 'Choose photo'}
+                            </Text>
+                          </Pressable>
                           <View style={styles.stencilOpacityRow}>
                             <Text style={styles.stencilOpacityLabel}>Opacity</Text>
                             <View style={styles.stencilOpacityControls}>
@@ -2372,13 +2467,19 @@ export function GardenSection({
                               </Pressable>
                             </View>
                           </View>
-                        ) : null}
+                        </View>
                       </View>
+                      <Text style={styles.stencilHelperText}>
+                        Turn on stencil mode to fade your reference over the camera feed while you arrange items on the canvas.
+                      </Text>
                     </View>
-                    <Text style={styles.stencilHelperText}>
-                      Turn on stencil mode to fade your reference over the camera feed while you arrange items on the canvas.
-                    </Text>
-                  </View>
+                  ) : (
+                    <View style={styles.stencilCollapsedBody}>
+                      <Text style={styles.stencilCollapsedHelper}>
+                        Toggle stencil mode to pick a reference photo and position it over your live camera feed.
+                      </Text>
+                    </View>
+                  )}
                 </View>
                 <View style={styles.textComposer}>
                   <Pressable
@@ -4038,7 +4139,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   stencilImageOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    zIndex: 1,
   },
   stencilImage: {
     width: '100%',
@@ -4676,11 +4780,61 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#134e32',
   },
+  paletteColorGrid: {
+    flexDirection: 'row',
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  paletteColorColumn: {
+    flex: 1,
+    gap: 10,
+  },
   paletteColorRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     columnGap: 10,
     rowGap: 10,
+  },
+  brushStyleColumn: {
+    flex: 1,
+    minWidth: 200,
+    gap: 8,
+  },
+  brushStyleLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#134e32',
+  },
+  brushStyleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  brushStyleOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f8fafc',
+  },
+  brushStyleOptionActive: {
+    borderColor: '#1f6f4a',
+    backgroundColor: '#ecfeff',
+  },
+  brushStyleIcon: {
+    fontSize: 16,
+  },
+  brushStyleText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  brushStyleTextActive: {
+    color: '#0f766e',
   },
   colorSwatch: {
     width: COLOR_WHEEL_SWATCH_SIZE,
@@ -4713,14 +4867,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   colorWheelButton: {
-    width: COLOR_WHEEL_SWATCH_SIZE,
-    height: COLOR_WHEEL_SWATCH_SIZE,
-    borderRadius: COLOR_WHEEL_SWATCH_SIZE / 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
     borderWidth: 2,
     borderColor: '#1f6f4a',
     backgroundColor: '#fef9c3',
-    alignItems: 'center',
-    justifyContent: 'center',
     shadowColor: '#facc15',
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -4733,6 +4888,11 @@ const styles = StyleSheet.create({
   },
   colorWheelIcon: {
     fontSize: 20,
+  },
+  colorWheelLabel: {
+    fontSize: 13,
+    color: '#1f2937',
+    fontWeight: '700',
   },
   colorWheelWrap: {
     marginTop: 16,
@@ -4821,6 +4981,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     paddingVertical: 6,
+  },
+  additionRowDisabled: {
+    opacity: 0.65,
   },
   additionCircle: {
     width: 64,
@@ -4929,6 +5092,15 @@ const styles = StyleSheet.create({
   },
   stencilBody: {
     gap: 12,
+  },
+  stencilCollapsedBody: {
+    paddingHorizontal: 6,
+    paddingBottom: 4,
+  },
+  stencilCollapsedHelper: {
+    color: '#475569',
+    fontSize: 13,
+    lineHeight: 18,
   },
   stencilPreviewRow: {
     flexDirection: 'row',
