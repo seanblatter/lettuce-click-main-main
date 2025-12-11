@@ -365,6 +365,11 @@ export function GardenSection({
   const [draggingInventoryId, setDraggingInventoryId] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [isPickingPhoto, setIsPickingPhoto] = useState(false);
+  const [isStencilMode, setIsStencilMode] = useState(false);
+  const [stencilLightOn, setStencilLightOn] = useState(true);
+  const [stencilGridOn, setStencilGridOn] = useState(true);
+  const [stencilOpacity, setStencilOpacity] = useState(0.7);
+  const [isStencilRecording, setIsStencilRecording] = useState(false);
   const [textDraft, setTextDraft] = useState('');
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyleId>('sprout');
   const [textScale] = useState(1); // Fixed at 1.0, users resize by dragging
@@ -1264,6 +1269,34 @@ export function GardenSection({
     }
   }, [addPhotoPlacement, getCanvasCenter, isPickingPhoto, setShowPalette]);
 
+  const toggleStencilMode = useCallback(() => {
+    setIsStencilMode((prev) => {
+      if (prev) {
+        setIsStencilRecording(false);
+      }
+      return !prev;
+    });
+  }, []);
+
+  const toggleStencilLight = useCallback(() => {
+    setStencilLightOn((prev) => !prev);
+  }, []);
+
+  const toggleStencilGrid = useCallback(() => {
+    setStencilGridOn((prev) => !prev);
+  }, []);
+
+  const adjustStencilOpacity = useCallback((delta: number) => {
+    setStencilOpacity((prev) => {
+      const next = clamp(Number((prev + delta).toFixed(2)), 0.2, 1);
+      return next;
+    });
+  }, []);
+
+  const toggleStencilRecording = useCallback(() => {
+    setIsStencilRecording((prev) => !prev);
+  }, []);
+
   // Filter out emojis from text input
   const handleTextInputChange = useCallback((text: string) => {
     // Remove emoji characters - matches all emoji patterns including:
@@ -2150,6 +2183,125 @@ export function GardenSection({
                     <Text style={styles.additionCopy}>
                       Drop a photo from your library onto the canvas.
                     </Text>
+                  </View>
+                </View>
+                <View style={styles.stencilCard}>
+                  <View style={styles.stencilHeaderRow}>
+                    <View style={styles.stencilBadge}>
+                      <Text style={styles.stencilBadgeText}>New</Text>
+                    </View>
+                    <View style={styles.stencilHeaderCopy}>
+                      <Text style={styles.stencilTitle}>Stencil mode</Text>
+                      <Text style={styles.stencilSubtitle}>
+                        Superimpose a reference image over your camera feed while you draw.
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={[styles.stencilToggle, isStencilMode ? styles.stencilToggleActive : styles.stencilToggleInactive]}
+                      onPress={toggleStencilMode}
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: isStencilMode }}
+                      accessibilityLabel="Toggle stencil mode"
+                    >
+                      <Text style={styles.stencilToggleText}>{isStencilMode ? 'On' : 'Off'}</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.stencilToolsGrid}>
+                    <Pressable
+                      style={[styles.stencilTool, stencilLightOn && styles.stencilToolActive, !isStencilMode && styles.stencilToolDisabled]}
+                      onPress={toggleStencilLight}
+                      disabled={!isStencilMode}
+                      accessibilityRole="button"
+                      accessibilityLabel="Toggle the live camera feed light"
+                      accessibilityState={{ disabled: !isStencilMode, checked: stencilLightOn }}
+                    >
+                      <View style={styles.stencilToolHeader}>
+                        <Text style={styles.stencilToolIcon}>🔦</Text>
+                        <Text style={styles.stencilToolTitle}>Light</Text>
+                        <View style={[styles.stencilPill, stencilLightOn ? styles.stencilPillActive : styles.stencilPillInactive]}>
+                          <Text style={styles.stencilPillText}>{stencilLightOn ? 'Camera on' : 'Camera off'}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.stencilToolCopy}>
+                        Turn on the device camera so you can see the canvas and reference image together.
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[styles.stencilTool, stencilGridOn && styles.stencilToolActive, !isStencilMode && styles.stencilToolDisabled]}
+                      onPress={toggleStencilGrid}
+                      disabled={!isStencilMode}
+                      accessibilityRole="button"
+                      accessibilityLabel="Toggle the overlay grid"
+                      accessibilityState={{ disabled: !isStencilMode, checked: stencilGridOn }}
+                    >
+                      <View style={styles.stencilToolHeader}>
+                        <Text style={styles.stencilToolIcon}>#️⃣</Text>
+                        <Text style={styles.stencilToolTitle}>Grid</Text>
+                        <View style={[styles.stencilPill, stencilGridOn ? styles.stencilPillActive : styles.stencilPillInactive]}>
+                          <Text style={styles.stencilPillText}>{stencilGridOn ? 'Overlay on' : 'Overlay off'}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.stencilToolCopy}>
+                        Place a guidance grid over the photo on your live camera feed to line up details.
+                      </Text>
+                    </Pressable>
+                    <View
+                      style={[styles.stencilTool, !isStencilMode && styles.stencilToolDisabled]}
+                      accessibilityElementsHidden={!isStencilMode}
+                      importantForAccessibility={isStencilMode ? 'auto' : 'no-hide-descendants'}
+                    >
+                      <View style={styles.stencilToolHeader}>
+                        <Text style={styles.stencilToolIcon}>🩶</Text>
+                        <Text style={styles.stencilToolTitle}>Opacity</Text>
+                        <View style={styles.stencilPillLight}>
+                          <Text style={styles.stencilPillLightText}>Adjust</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.stencilToolCopy}>
+                        Fade the reference image to the perfect traceable level on top of your camera feed.
+                      </Text>
+                      <View style={styles.stencilOpacityRow}>
+                        <Pressable
+                          style={[styles.stencilOpacityStepper, (stencilOpacity <= 0.2 || !isStencilMode) && styles.stencilOpacityStepperDisabled]}
+                          onPress={() => adjustStencilOpacity(-0.1)}
+                          disabled={!isStencilMode || stencilOpacity <= 0.2}
+                          accessibilityLabel="Reduce stencil opacity"
+                        >
+                          <Text style={styles.stencilOpacityStepperText}>−</Text>
+                        </Pressable>
+                        <View style={styles.stencilOpacityMeter}>
+                          <View style={[styles.stencilOpacityFill, { width: `${Math.round(stencilOpacity * 100)}%` }]} />
+                        </View>
+                        <Pressable
+                          style={[styles.stencilOpacityStepper, (stencilOpacity >= 1 || !isStencilMode) && styles.stencilOpacityStepperDisabled]}
+                          onPress={() => adjustStencilOpacity(0.1)}
+                          disabled={!isStencilMode || stencilOpacity >= 1}
+                          accessibilityLabel="Increase stencil opacity"
+                        >
+                          <Text style={styles.stencilOpacityStepperText}>＋</Text>
+                        </Pressable>
+                        <Text style={styles.stencilOpacityValue}>{Math.round(stencilOpacity * 100)}%</Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      style={[styles.stencilTool, isStencilRecording && styles.stencilToolActive, !isStencilMode && styles.stencilToolDisabled]}
+                      onPress={toggleStencilRecording}
+                      disabled={!isStencilMode}
+                      accessibilityRole="button"
+                      accessibilityLabel="Toggle camera recording"
+                      accessibilityState={{ disabled: !isStencilMode, checked: isStencilRecording }}
+                    >
+                      <View style={styles.stencilToolHeader}>
+                        <Text style={styles.stencilToolIcon}>⏺️</Text>
+                        <Text style={styles.stencilToolTitle}>Record</Text>
+                        <View style={[styles.stencilPill, isStencilRecording ? styles.stencilPillActive : styles.stencilPillInactive]}>
+                          <Text style={styles.stencilPillText}>{isStencilRecording ? 'Saving takes' : 'Ready'}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.stencilToolCopy}>
+                        Capture the camera feed while you trace. We will save your session when you are done.
+                      </Text>
+                    </Pressable>
                   </View>
                 </View>
                 <View style={styles.textComposer}>
@@ -4608,6 +4760,189 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#1f2937',
     lineHeight: 18,
+  },
+  stencilCard: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: '#f8fefc',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    gap: 12,
+  },
+  stencilHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stencilBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#ecfdf3',
+    borderWidth: 1,
+    borderColor: '#22c55e',
+  },
+  stencilBadgeText: {
+    color: '#15803d',
+    fontWeight: '800',
+    fontSize: 12,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  stencilHeaderCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  stencilTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#134e32',
+  },
+  stencilSubtitle: {
+    fontSize: 13,
+    color: '#1f2937',
+    lineHeight: 18,
+  },
+  stencilToggle: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  stencilToggleActive: {
+    backgroundColor: '#047857',
+    borderColor: '#065f46',
+  },
+  stencilToggleInactive: {
+    backgroundColor: '#e5e7eb',
+    borderColor: '#cbd5e1',
+  },
+  stencilToggleText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  stencilToolsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  stencilTool: {
+    width: '48%',
+    minWidth: '46%',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#d1fae5',
+    backgroundColor: '#ffffff',
+    gap: 8,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  stencilToolActive: {
+    borderColor: '#22c55e',
+    backgroundColor: '#ecfdf3',
+  },
+  stencilToolDisabled: {
+    opacity: 0.6,
+  },
+  stencilToolHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stencilToolIcon: {
+    fontSize: 20,
+  },
+  stencilToolTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#064e3b',
+    flex: 1,
+  },
+  stencilPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  stencilPillActive: {
+    backgroundColor: '#d1fae5',
+    borderColor: '#22c55e',
+  },
+  stencilPillInactive: {
+    backgroundColor: '#e5e7eb',
+    borderColor: '#cbd5e1',
+  },
+  stencilPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  stencilPillLight: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#e0f2fe',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  stencilPillLightText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  stencilToolCopy: {
+    fontSize: 13,
+    color: '#1f2937',
+    lineHeight: 18,
+  },
+  stencilOpacityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stencilOpacityMeter: {
+    flex: 1,
+    height: 12,
+    borderRadius: 10,
+    backgroundColor: '#e2e8f0',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  stencilOpacityFill: {
+    height: '100%',
+    backgroundColor: '#0ea5e9',
+  },
+  stencilOpacityStepper: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  stencilOpacityStepperDisabled: {
+    opacity: 0.5,
+  },
+  stencilOpacityStepperText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  stencilOpacityValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f172a',
   },
   textComposer: {
     marginTop: 12,
