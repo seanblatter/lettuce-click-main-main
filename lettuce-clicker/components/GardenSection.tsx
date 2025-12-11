@@ -42,6 +42,7 @@ import { computeBellCurveCost, emojiCategoryOrder, formatClickValue, MIN_EMOJI_C
 import { EmojiDefinition, Placement, TextStyleId, WidgetPromenadeEntry } from '@/context/GameContext';
 import { useGame } from '@/context/GameContext';
 import { fetchEmojiKitchenMash, formatCustomEmojiName, getRandomCompatibleEmoji } from '@/lib/emojiKitchenService';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 type Props = {
   harvest: number;
@@ -368,6 +369,10 @@ export function GardenSection({
   const [textDraft, setTextDraft] = useState('');
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyleId>('sprout');
   const [textScale] = useState(1); // Fixed at 1.0, users resize by dragging
+  const [stencilModeEnabled, setStencilModeEnabled] = useState(false);
+  const [stencilOpacity, setStencilOpacity] = useState(0.6);
+  const [stencilReferenceUri, setStencilReferenceUri] = useState<string | null>(null);
+  const [isPickingStencilReference, setIsPickingStencilReference] = useState(false);
   const [shopEmoji, setShopEmoji] = useState('🏡');
   const [inventoryEmoji, setInventoryEmoji] = useState('🧰');
   const [activeEmojiPicker, setActiveEmojiPicker] = useState<'shop' | 'inventory' | null>(null);
@@ -433,6 +438,7 @@ export function GardenSection({
   const { height: windowHeight } = useWindowDimensions();
   const paletteMaxHeight = Math.max(windowHeight - insets.top - 32, 360);
   const palettePaddingBottom = 24 + insets.bottom;
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   useEffect(() => {
     setActiveEmojiPicker(null);
@@ -1264,6 +1270,84 @@ export function GardenSection({
     }
   }, [addPhotoPlacement, getCanvasCenter, isPickingPhoto, setShowPalette]);
 
+  const ensureCameraPermission = useCallback(async () => {
+    if (cameraPermission?.granted) {
+      return true;
+    }
+
+    const result = await requestCameraPermission();
+
+    if (result?.granted) {
+      return true;
+    }
+
+    Alert.alert('Camera access needed', 'Allow camera access to overlay your stencil on the canvas.');
+    return false;
+  }, [cameraPermission?.granted, requestCameraPermission]);
+
+  const handlePickStencilReference = useCallback(async () => {
+    if (isPickingStencilReference) {
+      return;
+    }
+
+    try {
+      setIsPickingStencilReference(true);
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert('Permission needed', 'Enable photo access to choose a stencil reference.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.7,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      const uri = asset?.uri;
+
+      if (!uri) {
+        Alert.alert('Pick photo failed', 'We could not read that photo. Please try another.');
+        return;
+      }
+
+      setStencilReferenceUri(uri);
+    } catch {
+      Alert.alert('Pick photo failed', 'We could not open your photo library.');
+    } finally {
+      setIsPickingStencilReference(false);
+    }
+  }, [isPickingStencilReference]);
+
+  const handleToggleStencilMode = useCallback(async () => {
+    const next = !stencilModeEnabled;
+
+    if (next) {
+      const hasReference = Boolean(stencilReferenceUri);
+
+      if (!hasReference) {
+        Alert.alert('Add a stencil photo', 'Choose a reference photo to overlay on your camera.');
+        return;
+      }
+
+      const granted = await ensureCameraPermission();
+      if (!granted) {
+        return;
+      }
+    }
+
+    setStencilModeEnabled(next);
+  }, [ensureCameraPermission, stencilModeEnabled, stencilReferenceUri]);
+
+  const handleAdjustStencilOpacity = useCallback((delta: number) => {
+    setStencilOpacity((prev) => clamp(Number((prev + delta).toFixed(2)), 0.1, 1));
+  }, []);
+
   // Filter out emojis from text input
   const handleTextInputChange = useCallback((text: string) => {
     // Remove emoji characters - matches all emoji patterns including:
@@ -1853,6 +1937,18 @@ export function GardenSection({
             onTouchMove={handleCanvasTouchMove}
             onTouchEnd={handleCanvasTouchEnd}
             onTouchCancel={handleCanvasTouchEnd}>
+            {stencilModeEnabled && cameraPermission?.granted ? (
+              <View pointerEvents="none" style={styles.stencilLayer} accessibilityElementsHidden>
+                <CameraView style={styles.stencilCamera} facing="back" />
+                {stencilReferenceUri ? (
+                  <Image
+                    source={{ uri: stencilReferenceUri }}
+                    style={[styles.stencilImageOverlay, { opacity: stencilOpacity }]}
+                    resizeMode="contain"
+                  />
+                ) : null}
+              </View>
+            ) : null}
             <View pointerEvents="none" style={styles.drawingSurface}>
               {strokes.reduce<React.ReactElement[]>((acc, stroke) => {
                 acc.push(...renderStrokeSegments(stroke, stroke.id));
@@ -2149,6 +2245,81 @@ export function GardenSection({
                     <Text style={styles.additionTitle}>Photo charm</Text>
                     <Text style={styles.additionCopy}>
                       Drop a photo from your library onto the canvas.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.stencilCard}>
+                  <View style={styles.stencilHeader}>
+                    <View style={styles.stencilIconBubble}>
+                      <Text style={styles.stencilIcon}>🎨</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.stencilTitle}>Stencil mode</Text>
+                      <Text style={styles.stencilCopy}>
+                        Superimpose your reference photo over the live camera to trace details on the canvas.
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={[styles.stencilToggle, stencilModeEnabled && styles.stencilToggleActive]}
+                      onPress={handleToggleStencilMode}
+                      accessibilityRole="switch"
+                      accessibilityState={{ checked: stencilModeEnabled }}
+                      accessibilityLabel="Toggle stencil mode"
+                    >
+                      <View
+                        style={[styles.stencilToggleKnob, stencilModeEnabled && styles.stencilToggleKnobActive]}
+                      />
+                    </Pressable>
+                  </View>
+                  <View style={styles.stencilBody}>
+                    <View style={styles.stencilPreviewRow}>
+                      <View style={styles.stencilPreviewFrame}>
+                        {stencilReferenceUri ? (
+                          <Image source={{ uri: stencilReferenceUri }} style={styles.stencilPreviewImage} />
+                        ) : (
+                          <Text style={styles.stencilPreviewPlaceholder}>Pick a reference photo</Text>
+                        )}
+                      </View>
+                      <View style={styles.stencilActions}>
+                        <Pressable
+                          style={[styles.stencilButton, isPickingStencilReference && styles.stencilButtonDisabled]}
+                          onPress={handlePickStencilReference}
+                          disabled={isPickingStencilReference}
+                          accessibilityRole="button"
+                          accessibilityLabel="Choose stencil reference photo"
+                        >
+                          <Text style={styles.stencilButtonText}>
+                            {stencilReferenceUri ? 'Replace photo' : 'Choose photo'}
+                          </Text>
+                        </Pressable>
+                        {stencilModeEnabled ? (
+                          <View style={styles.stencilOpacityRow}>
+                            <Text style={styles.stencilOpacityLabel}>Opacity</Text>
+                            <View style={styles.stencilOpacityControls}>
+                              <Pressable
+                                style={styles.stencilOpacityPill}
+                                onPress={() => handleAdjustStencilOpacity(-0.1)}
+                                accessibilityLabel="Lower stencil opacity"
+                              >
+                                <Text style={styles.stencilOpacityText}>-</Text>
+                              </Pressable>
+                              <View style={styles.stencilOpacityValue}>
+                                <Text style={styles.stencilOpacityValueText}>{Math.round(stencilOpacity * 100)}%</Text>
+                              </View>
+                              <Pressable
+                                style={styles.stencilOpacityPill}
+                                onPress={() => handleAdjustStencilOpacity(0.1)}
+                                accessibilityLabel="Increase stencil opacity"
+                              >
+                                <Text style={styles.stencilOpacityText}>+</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                    <Text style={styles.stencilHelperText}>
+                      Turn on stencil mode to fade your reference over the camera feed while you arrange items on the canvas.
                     </Text>
                   </View>
                 </View>
@@ -3796,6 +3967,16 @@ const styles = StyleSheet.create({
     elevation: 6,
     overflow: 'hidden',
   },
+  stencilLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1,
+  },
+  stencilCamera: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  stencilImageOverlay: {
+    ...StyleSheet.absoluteFillObject,
+  },
   drawingSurface: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -4607,6 +4788,168 @@ const styles = StyleSheet.create({
   additionCopy: {
     fontSize: 13,
     color: '#1f2937',
+    lineHeight: 18,
+  },
+  stencilCard: {
+    marginTop: 10,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#ffffff',
+    gap: 12,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  stencilHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  stencilIconBubble: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#ecfdf3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  stencilIcon: {
+    fontSize: 22,
+  },
+  stencilTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#134e32',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  stencilCopy: {
+    fontSize: 13,
+    color: '#1f2937',
+    lineHeight: 18,
+  },
+  stencilToggle: {
+    width: 56,
+    height: 30,
+    borderRadius: 16,
+    backgroundColor: '#e2e8f0',
+    padding: 4,
+    justifyContent: 'center',
+  },
+  stencilToggleActive: {
+    backgroundColor: '#10b981',
+    alignItems: 'flex-end',
+  },
+  stencilToggleKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ffffff',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  stencilToggleKnobActive: {
+    backgroundColor: '#ecfdf3',
+  },
+  stencilBody: {
+    gap: 12,
+  },
+  stencilPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  stencilPreviewFrame: {
+    width: 110,
+    height: 110,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  stencilPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  stencilPreviewPlaceholder: {
+    color: '#475569',
+    fontSize: 12,
+    textAlign: 'center',
+    paddingHorizontal: 10,
+  },
+  stencilActions: {
+    flex: 1,
+    gap: 10,
+  },
+  stencilButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#0f766e',
+    alignItems: 'center',
+  },
+  stencilButtonDisabled: {
+    backgroundColor: '#cbd5e1',
+  },
+  stencilButtonText: {
+    color: '#ecfdf3',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  stencilOpacityRow: {
+    gap: 8,
+  },
+  stencilOpacityLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#14532d',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  stencilOpacityControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stencilOpacityPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#ecfdf3',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  stencilOpacityText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f766e',
+  },
+  stencilOpacityValue: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#0f766e',
+  },
+  stencilOpacityValueText: {
+    color: '#ecfdf3',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  stencilHelperText: {
+    fontSize: 12,
+    color: '#334155',
     lineHeight: 18,
   },
   textComposer: {
