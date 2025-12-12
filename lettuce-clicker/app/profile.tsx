@@ -19,7 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useGame } from '@/context/GameContext';
 
 const PREMIUM_ACCENT_OPTIONS = ['#1f6f4a', '#047857', '#2563eb', '#a855f7', '#f97316', '#0ea5e9'];
-const CLICK_EMOJI_CHOICES = ['🍁', '🍪', '🌺', '🌲', '🌴', '🍄', '🍀', '🍎', '🍏', '🖼️', '🗺️', '🪙', '🛎️', '🌵'] as const;
+const CLICK_EMOJI_CHOICES = ['🍎', '🍓', '🥕', '🍁', '🍪', '🌺', '🌲', '🌴', '🍄', '🍀', '🍏', '🖼️', '🗺️', '🪙', '🛎️', '🌵'] as const;
 const BACKGROUND_WHEEL_COLORS = [
   '#f2f9f2',
   '#ffffff',

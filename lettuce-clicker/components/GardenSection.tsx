@@ -139,21 +139,33 @@ const modelStrokePoints = (points: StrokePoint[], style: StrokeStyleId, seed: nu
 
   for (let index = 1; index < points.length; index += 1) {
     const nextPoint = points[index];
-    const smoothed = {
-      x: lerp(lastPoint.x, nextPoint.x, preset.smoothing),
-      y: lerp(lastPoint.y, nextPoint.y, preset.smoothing),
-    };
-    const jitterAmount = preset.jitter * 3;
-    const noiseX = (seededRandom(seed, index) - 0.5) * jitterAmount;
-    const noiseY = (seededRandom(seed, index + 41) - 0.5) * jitterAmount;
+    const dx = nextPoint.x - lastPoint.x;
+    const dy = nextPoint.y - lastPoint.y;
+    const distance = Math.hypot(dx, dy);
+    const steps = Math.max(1, Math.ceil(distance / 2));
 
-    const modeledPoint = {
-      x: smoothed.x + noiseX,
-      y: smoothed.y + noiseY,
-    };
+    for (let step = 1; step <= steps; step += 1) {
+      const t = step / steps;
+      const easedT = Math.pow(t, 0.85);
+      const baseX = lerp(lastPoint.x, nextPoint.x, easedT);
+      const baseY = lerp(lastPoint.y, nextPoint.y, easedT);
+      const smoothingFactor = lerp(preset.smoothing, 1, easedT * 0.35);
+      const smoothed = {
+        x: lerp(lastPoint.x, baseX, smoothingFactor),
+        y: lerp(lastPoint.y, baseY, smoothingFactor),
+      };
+      const jitterAmount = preset.jitter * 1.6;
+      const noiseX = (seededRandom(seed, index * 31 + step) - 0.5) * jitterAmount;
+      const noiseY = (seededRandom(seed, index * 31 + step + 17) - 0.5) * jitterAmount;
 
-    modeled.push(modeledPoint);
-    lastPoint = modeledPoint;
+      const modeledPoint = {
+        x: smoothed.x + noiseX,
+        y: smoothed.y + noiseY,
+      };
+
+      modeled.push(modeledPoint);
+      lastPoint = modeledPoint;
+    }
   }
 
   return modeled;
@@ -236,34 +248,37 @@ const COLOR_WHEEL_DIAMETER = 160;
 const COLOR_WHEEL_RADIUS = 64;
 const COLOR_WHEEL_SWATCH_SIZE = 34;
 const PEN_SIZES = [3, 5, 8, 12];
-const BRUSH_STYLE_OPTIONS: { id: StrokeStyleId; label: string; helper: string; sizeScale: number; opacity: number; smoothing: number; jitter: number; taper: boolean }[] = [
+const BRUSH_STYLE_OPTIONS: { id: StrokeStyleId; label: string; helper: string; icon: string; sizeScale: number; opacity: number; smoothing: number; jitter: number; taper: boolean }[] = [
   {
     id: 'pencil',
     label: 'Pencil',
     helper: 'Sketch with a soft pencil grain.',
-    sizeScale: 0.9,
-    opacity: 0.75,
-    smoothing: 0.55,
-    jitter: 0.4,
+    icon: '✏️',
+    sizeScale: 0.95,
+    opacity: 0.82,
+    smoothing: 0.7,
+    jitter: 0.28,
     taper: true,
   },
   {
     id: 'pen',
     label: 'Pen',
     helper: 'Precise ink that hugs your path.',
+    icon: '🖋️',
     sizeScale: 1,
     opacity: 1,
-    smoothing: 0.65,
-    jitter: 0.1,
+    smoothing: 0.78,
+    jitter: 0.08,
     taper: true,
   },
   {
     id: 'marker',
     label: 'Marker',
     helper: 'Thick strokes with steady flow.',
+    icon: '🖍️',
     sizeScale: 1.4,
     opacity: 0.9,
-    smoothing: 0.5,
+    smoothing: 0.68,
     jitter: 0.05,
     taper: false,
   },
@@ -271,10 +286,11 @@ const BRUSH_STYLE_OPTIONS: { id: StrokeStyleId; label: string; helper: string; s
     id: 'chalk',
     label: 'Chalk',
     helper: 'Textured lines with dusty edges.',
-    sizeScale: 1.2,
-    opacity: 0.7,
-    smoothing: 0.45,
-    jitter: 0.6,
+    icon: '🧽',
+    sizeScale: 1.25,
+    opacity: 0.78,
+    smoothing: 0.62,
+    jitter: 0.38,
     taper: false,
   },
 ];
@@ -459,6 +475,7 @@ export function GardenSection({
   const [showPalette, setShowPalette] = useState(false);
   const [isFontDropdownOpen, setFontDropdownOpen] = useState(false);
   const [showExtendedPalette, setShowExtendedPalette] = useState(false);
+  const [showBrushPalette, setShowBrushPalette] = useState(false);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [penColor, setPenColor] = useState<string>(QUICK_DRAW_COLORS[0]);
   const [penSize, setPenSize] = useState(PEN_SIZES[1]);
@@ -2414,10 +2431,23 @@ export function GardenSection({
                   </Pressable>
                   <Pressable
                     style={[styles.colorWheelButton, showExtendedPalette && styles.colorWheelButtonActive]}
-                    onPress={() => setShowExtendedPalette((prev) => !prev)}
+                    onPress={() => {
+                      setShowExtendedPalette((prev) => !prev);
+                      setShowBrushPalette(false);
+                    }}
                     accessibilityLabel={showExtendedPalette ? 'Hide color wheel' : 'Show color wheel'}
                   >
                     <Text style={styles.colorWheelIcon}>🎨</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.colorWheelButton, showBrushPalette && styles.colorWheelButtonActive]}
+                    onPress={() => {
+                      setShowBrushPalette((prev) => !prev);
+                      setShowExtendedPalette(false);
+                    }}
+                    accessibilityLabel={showBrushPalette ? 'Hide brush styles' : 'Show brush styles'}
+                  >
+                    <Text style={styles.colorWheelIcon}>🖌️</Text>
                   </Pressable>
                 </View>
                 {showExtendedPalette ? (
@@ -2449,25 +2479,51 @@ export function GardenSection({
                           </Pressable>
                         </View>
                       </View>
-                      <View style={styles.brushStyleColumn}>
-                        <Text style={styles.brushStyleTitle}>Brush stroke</Text>
-                        {BRUSH_STYLE_OPTIONS.map((option) => {
-                          const isActive = option.id === strokeStyle;
-                          return (
-                            <Pressable
-                              key={option.id}
-                              style={[styles.brushStyleChip, isActive && styles.brushStyleChipActive]}
-                              onPress={() => handleSelectStrokeStyle(option.id)}
-                              accessibilityRole="button"
-                              accessibilityLabel={`${option.label} brush style`}
-                              accessibilityState={{ selected: isActive }}
-                            >
+                    </View>
+                  </View>
+                ) : null}
+                {showBrushPalette ? (
+                  <View style={styles.brushStyleWrap}>
+                    <View style={styles.brushStyleHeaderRow}>
+                      <Text style={styles.brushStyleTitle}>Brush stroke</Text>
+                      <Text style={styles.brushStyleSubtitle}>Pick a stroke personality with emoji flair.</Text>
+                    </View>
+                    <View style={styles.brushStyleGrid}>
+                      {BRUSH_STYLE_OPTIONS.map((option) => {
+                        const isActive = option.id === strokeStyle;
+                        const previewColor = penColor === ERASER_COLOR ? '#cbd5e1' : applyAlpha(penColor, option.opacity);
+                        return (
+                          <Pressable
+                            key={option.id}
+                            style={[styles.brushStyleChip, isActive && styles.brushStyleChipActive]}
+                            onPress={() => handleSelectStrokeStyle(option.id)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${option.label} brush style`}
+                            accessibilityState={{ selected: isActive }}
+                          >
+                            <View style={styles.brushStyleChipHeader}>
+                              <View style={styles.brushStyleIconBubble}>
+                                <Text style={styles.brushStyleEmoji}>{option.icon}</Text>
+                              </View>
                               <Text style={styles.brushStyleChipLabel}>{option.label}</Text>
-                              <Text style={styles.brushStyleChipHelper}>{option.helper}</Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
+                            </View>
+                            <View style={styles.brushPreviewRow}>
+                              <Text style={styles.brushPreviewEmoji}>{option.icon}</Text>
+                              <View
+                                style={[
+                                  styles.brushPreviewStroke,
+                                  {
+                                    backgroundColor: previewColor,
+                                    shadowColor: penColor === ERASER_COLOR ? '#94a3b8' : penColor,
+                                  },
+                                ]}
+                              />
+                              <Text style={styles.brushPreviewEmoji}>✨</Text>
+                            </View>
+                            <Text style={styles.brushStyleChipHelper}>{option.helper}</Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
                   </View>
                 ) : null}
@@ -5022,14 +5078,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#0f172a',
   },
-  brushStyleColumn: {
-    flex: 1,
-    gap: 10,
-    padding: 8,
+  brushStyleWrap: {
+    marginTop: 14,
+    gap: 12,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#d1fae5',
     borderRadius: 16,
     backgroundColor: '#ffffff',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  brushStyleHeaderRow: {
+    gap: 4,
   },
   brushStyleTitle: {
     fontSize: 14,
@@ -5037,14 +5101,26 @@ const styles = StyleSheet.create({
     color: '#134e32',
     letterSpacing: 0.3,
   },
+  brushStyleSubtitle: {
+    fontSize: 12,
+    color: '#0f172a',
+    opacity: 0.85,
+  },
+  brushStyleGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
   brushStyleChip: {
     borderWidth: 1,
     borderColor: '#bbf7d0',
     borderRadius: 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     backgroundColor: '#f8fffb',
-    gap: 4,
+    gap: 8,
+    flexGrow: 1,
+    flexBasis: '48%',
   },
   brushStyleChipActive: {
     borderColor: '#0f766e',
@@ -5055,10 +5131,45 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 3,
   },
+  brushStyleChipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  brushStyleIconBubble: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fcd34d',
+  },
+  brushStyleEmoji: {
+    fontSize: 16,
+  },
   brushStyleChipLabel: {
     fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
+  },
+  brushPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  brushPreviewEmoji: {
+    fontSize: 15,
+  },
+  brushPreviewStroke: {
+    flex: 1,
+    height: 12,
+    borderRadius: 16,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
   },
   brushStyleChipHelper: {
     fontSize: 12,
