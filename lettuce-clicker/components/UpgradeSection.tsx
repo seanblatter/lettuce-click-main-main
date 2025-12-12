@@ -554,7 +554,7 @@ export function UpgradeSection({
             {automationToggleHint}
           </Text>
           <View style={styles.workshopToggleBadge}>
-            <Text style={styles.workshopToggleBadgeText}>⚙️ {ownedUpgradeCount.toLocaleString()} owned</Text>
+            <Text style={styles.workshopToggleBadgeText}>🕗 {ownedUpgradeCount.toLocaleString()} owned</Text>
           </View>
         </Pressable>
 

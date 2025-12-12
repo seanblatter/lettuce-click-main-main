@@ -13,6 +13,7 @@ import {
   View,
   GestureResponderEvent,
   Image,
+  ImageSourcePropType,
   useWindowDimensions,
   useColorScheme,
   AppState,
@@ -44,6 +45,16 @@ const DAILY_BONUS_LAST_CLAIM_KEY = 'lettuce-click:daily-bonus-last-claim';
 const BONUS_REWARD_OPTIONS = [75, 125, 200, 325, 500, 650];
 const BONUS_ADDITIONAL_SPINS = 2;
 const DAILY_BONUS_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const VARIATION_SELECTOR_REGEX = /[\uFE0E\uFE0F]/g;
+
+const CLICKER_ICON_SOURCES: Record<'default' | 'apple' | 'strawberry' | 'carrot', ImageSourcePropType> = {
+  default: require('@/assets/images/clicker-icon.png'),
+  apple: require('@/assets/images/clicker-icon-apples.png'),
+  strawberry: require('@/assets/images/clicker-icon-strawberries.png'),
+  carrot: require('@/assets/images/clicker-icon-carrot.png'),
+};
+
+const normalizeEmoji = (value: string) => value.replace(VARIATION_SELECTOR_REGEX, '');
 const LEDGER_THEMES = [
   {
     backgroundColor: 'rgba(255, 255, 255, 0.32)',
@@ -211,6 +222,24 @@ export default function HomeScreen() {
     () => gardenEmojiCatalog.filter((emoji) => !emojiInventory[emoji.id]),
     [emojiInventory]
   );
+
+  const clickerIconSource = useMemo(() => {
+    const normalized = normalizeEmoji(customClickEmoji);
+
+    if (normalized === '🍎') {
+      return CLICKER_ICON_SOURCES.apple;
+    }
+
+    if (normalized === '🍓') {
+      return CLICKER_ICON_SOURCES.strawberry;
+    }
+
+    if (normalized === '🥕') {
+      return CLICKER_ICON_SOURCES.carrot;
+    }
+
+    return CLICKER_ICON_SOURCES.default;
+  }, [customClickEmoji]);
   const [showGrowModal, setShowGrowModal] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPage, setMenuPage] = useState<'overview' | 'themes'>('overview');
@@ -1352,7 +1381,7 @@ export default function HomeScreen() {
                 ]}
               >
                 <Reanimated.Image
-                  source={require('@/assets/images/clicker-icon.png')}
+                  source={clickerIconSource}
                   style={[
                     styles.lettuceImage,
                     floatingStyle
