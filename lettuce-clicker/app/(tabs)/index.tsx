@@ -249,6 +249,7 @@ export default function HomeScreen() {
   const [showMusicQuickAction, setShowMusicQuickAction] = useState(false);
   const [showWidgetPromenade, setShowWidgetPromenade] = useState(false);
   const [showGamesHub, setShowGamesHub] = useState(false);
+  const [isNavMenuOpen, setIsNavMenuOpen] = useState(false);
   // Add state for selected widget promenade entry
   const [selectedWidgetPromenadeId, setSelectedWidgetPromenadeId] = useState<string | null>(null);
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
@@ -678,6 +679,7 @@ export default function HomeScreen() {
   }, [isAmbientPlaying, selectTrack, selectedTrackId]);
   
   const isLandscape = useMemo(() => dimensions.width > dimensions.height, [dimensions]);
+  const isMobile = useMemo(() => dimensions.width < 768, [dimensions.width]);
   const headerPaddingTop = useMemo(() => Math.max(insets.top - 6, 0) + (isLandscape ? 4 : 8), [insets.top, isLandscape]);
   const contentPaddingBottom = useMemo(() => insets.bottom + 32, [insets.bottom]);
   const friendlyName = useMemo(() => {
@@ -718,6 +720,56 @@ export default function HomeScreen() {
   const selectedTrack = useMemo(
     () => MUSIC_OPTIONS.find((option) => option.id === selectedTrackId) ?? MUSIC_OPTIONS[0],
     [selectedTrackId]
+  );
+  const navLinks = useMemo(() => ['Home', 'Channels', 'Analytics', 'Storage'], []);
+  const userInitial = useMemo(() => (friendlyName ? friendlyName.trim().charAt(0).toUpperCase() : 'L'), [friendlyName]);
+
+  const handleNavPress = useCallback(
+    (destination: string) => {
+      setIsNavMenuOpen(false);
+      Alert.alert(destination, 'Navigation coming soon.');
+    },
+    []
+  );
+
+  const studioCard = (
+    <View style={[styles.utilityCard, styles.studioCard, isMobile && styles.utilityCardMobile]}>
+      <View style={styles.utilityHeaderRow}>
+        <Text style={styles.utilityTitle}>Studio</Text>
+        <Text style={styles.utilityPill}>Mobile</Text>
+      </View>
+      <Text style={styles.utilityCopy}>
+        Manage layouts, chats, and controls with larger tap targets. We moved the studio workspace above destinations so it stays within thumb reach.
+      </Text>
+      <View style={[styles.utilityActions, isMobile && styles.utilityActionsMobile]}>
+        <Pressable style={styles.primaryUtilityAction} onPress={() => handleNavPress('Home')}>
+          <Text style={styles.primaryUtilityText}>Open studio</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryUtilityAction} onPress={() => handleNavPress('Channels')}>
+          <Text style={styles.secondaryUtilityText}>Quick edit</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const destinationCard = (
+    <View style={[styles.utilityCard, styles.destinationCard, isMobile && styles.utilityCardMobile]}>
+      <View style={styles.utilityHeaderRow}>
+        <Text style={styles.utilityTitle}>Destinations</Text>
+        <Text style={styles.utilityPill}>Live</Text>
+      </View>
+      <Text style={styles.utilityCopy}>
+        Keep your channels, analytics, and storage summaries tidy. Mobile users see this below the studio for a calmer, scroll-first layout.
+      </Text>
+      <View style={[styles.utilityActions, isMobile && styles.utilityActionsMobile]}>
+        <Pressable style={styles.secondaryUtilityAction} onPress={() => handleNavPress('Analytics')}>
+          <Text style={styles.secondaryUtilityText}>View analytics</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryUtilityAction} onPress={() => handleNavPress('Storage')}>
+          <Text style={styles.secondaryUtilityText}>Manage storage</Text>
+        </Pressable>
+      </View>
+    </View>
   );
   const emojiCollectionCount = useMemo(
     () => Object.values(emojiInventory).filter(Boolean).length,
@@ -1348,27 +1400,107 @@ export default function HomeScreen() {
             isLandscape && styles.headerWrapperLandscape
           ]}>
             <View style={[styles.headerShelf, isLandscape && styles.headerShelfLandscape]}>
-              <Text style={[styles.headerText, isLandscape && styles.headerTextLandscape]}>Lettuce Idle Garden</Text>
+              <Text style={[styles.headerText, isLandscape && styles.headerTextLandscape]}>Lettuce Stream</Text>
+              <View style={[styles.headerActions, isLandscape && styles.headerActionsLandscape]}>
+                {isMobile ? (
+                  <View style={styles.mobileMenuContainer}>
+                    <Pressable
+                      style={styles.mobileMenuTrigger}
+                      onPress={() => setIsNavMenuOpen((open) => !open)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open navigation menu"
+                      accessibilityState={{ expanded: isNavMenuOpen }}
+                    >
+                      <View style={styles.menuAvatar}>
+                        <Text style={styles.menuAvatarText}>{userInitial}</Text>
+                      </View>
+                      <Text style={styles.menuTriggerText} numberOfLines={1}>
+                        {friendlyName}
+                      </Text>
+                      <Feather name={isNavMenuOpen ? 'chevron-up' : 'menu'} size={20} color="#0f172a" />
+                    </Pressable>
+                    {isNavMenuOpen ? (
+                      <View style={styles.dropdownMenu}>
+                        <View style={styles.dropdownHeader}>
+                          <View style={styles.dropdownAvatar}>
+                            <Text style={styles.dropdownAvatarText}>{userInitial}</Text>
+                          </View>
+                          <View>
+                            <Text style={styles.dropdownTitle}>{friendlyName}</Text>
+                            <Text style={styles.dropdownSubtitle}>Signed in</Text>
+                          </View>
+                        </View>
+                        {navLinks.map((link) => (
+                          <Pressable
+                            key={link}
+                            style={styles.dropdownItem}
+                            onPress={() => handleNavPress(link)}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Go to ${link}`}
+                          >
+                            <Text style={styles.dropdownItemText}>{link}</Text>
+                            <Feather name="chevron-right" size={16} color="#0f172a" />
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                ) : (
+                  navLinks.map((link) => (
+                    <Pressable
+                      key={link}
+                      style={styles.desktopNavChip}
+                      onPress={() => handleNavPress(link)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Go to ${link}`}
+                    >
+                      <Text style={styles.desktopNavText}>{link}</Text>
+                    </Pressable>
+                  ))
+                )}
+              </View>
             </View>
           </View>
 
-        <Pressable
-          style={[
-            styles.content, 
-            styles.contentStatic, 
-            { 
-              paddingTop: isLandscape ? 16 : 32, 
-              paddingBottom: contentPaddingBottom,
-              paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24, // Add safe area padding in landscape
-              paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24, // Add safe area padding in landscape
-              flexDirection: isLandscape ? 'row' : 'column',
-              alignItems: isLandscape ? 'flex-start' : 'stretch',
-              justifyContent: isLandscape ? 'space-between' : 'space-between',
-            }
-          ]}
-        >
+          <View
+            style={[
+              styles.utilityRow,
+              isMobile ? styles.utilityRowMobile : styles.utilityRowDesktop,
+              { paddingHorizontal: isLandscape ? Math.max(insets.left + 16, 24) : 24 },
+            ]}
+          >
+            {isMobile ? (
+              <>
+                {studioCard}
+                {destinationCard}
+              </>
+            ) : (
+              <>
+                {destinationCard}
+                {studioCard}
+              </>
+            )}
+          </View>
+
+          <Pressable
+            style={[
+              styles.content,
+              styles.contentStatic,
+              {
+                paddingTop: isLandscape ? 16 : 32,
+                paddingBottom: contentPaddingBottom,
+                paddingLeft: isLandscape ? Math.max(insets.left + 16, 24) : 24, // Add safe area padding in landscape
+                paddingRight: isLandscape ? Math.max(insets.right + 16, 24) : 24, // Add safe area padding in landscape
+                flexDirection: isLandscape ? 'row' : 'column',
+                alignItems: isLandscape ? 'flex-start' : 'stretch',
+                justifyContent: isLandscape ? 'space-between' : 'space-between',
+              }
+            ]}
+          >
           <View style={[styles.lettuceWrapper, isLandscape && styles.lettuceWrapperLandscape]}>
-            <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
+            {!(isMobile && homeEmojiTheme === 'lake') ? (
+              <OrbitingUpgradeEmojis emojis={orbitingUpgradeEmojis} theme={homeEmojiTheme} />
+            ) : null}
             <GestureDetector gesture={djGesture}>
               <Pressable
                 accessibilityLabel="Harvest lettuce"
@@ -2429,6 +2561,217 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  headerActionsLandscape: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  mobileMenuContainer: {
+    position: 'relative',
+    minWidth: 170,
+  },
+  mobileMenuTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#e9f5ec',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#c5e5cf',
+  },
+  menuAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#1f6f4a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuAvatarText: {
+    color: '#f7fff9',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  menuTriggerText: {
+    fontWeight: '700',
+    color: '#0f172a',
+    flexShrink: 1,
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 52,
+    right: 0,
+    left: 0,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 12,
+    borderWidth: 1,
+    borderColor: '#dfe7e1',
+    gap: 10,
+    zIndex: 50,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  dropdownAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#c5e5cf',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropdownAvatarText: {
+    color: '#1f6f4a',
+    fontWeight: '800',
+  },
+  dropdownTitle: {
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  dropdownSubtitle: {
+    color: '#475569',
+    fontSize: 12,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: '#f8faf9',
+  },
+  dropdownItemText: {
+    color: '#0f172a',
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  desktopNavChip: {
+    backgroundColor: '#e8f4ec',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#c5e5cf',
+  },
+  desktopNavText: {
+    color: '#14532d',
+    fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  utilityRow: {
+    width: '100%',
+    gap: 14,
+    marginTop: 8,
+  },
+  utilityRowMobile: {
+    flexDirection: 'column',
+  },
+  utilityRowDesktop: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+  },
+  utilityCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#d9e7dd',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+    flex: 1,
+    minHeight: 120,
+  },
+  utilityCardMobile: {
+    width: '100%',
+  },
+  studioCard: {
+    backgroundColor: '#f1fbf4',
+  },
+  destinationCard: {
+    backgroundColor: '#f8faf9',
+  },
+  utilityHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  utilityTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  utilityPill: {
+    backgroundColor: '#d1fae5',
+    color: '#065f46',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  utilityCopy: {
+    color: '#475569',
+    lineHeight: 20,
+    fontSize: 13,
+  },
+  utilityActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  utilityActionsMobile: {
+    flexDirection: 'column',
+  },
+  primaryUtilityAction: {
+    backgroundColor: '#1f6f4a',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    flex: 1,
+    shadowColor: '#1f6f4a',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  primaryUtilityText: {
+    color: '#f8fff6',
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  secondaryUtilityAction: {
+    backgroundColor: '#ecf5ef',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d9e7dd',
+  },
+  secondaryUtilityText: {
+    color: '#0f172a',
+    fontWeight: '700',
+    letterSpacing: 0.1,
   },
   alarmButton: {
     paddingHorizontal: 6,
